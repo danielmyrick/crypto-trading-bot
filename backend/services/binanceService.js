@@ -1,36 +1,38 @@
 // backend/services/binanceService.js
-const { Spot } = require('@binance/connector');
+const axios = require('axios');
 
-const client = new Spot(
-    process.env.BINANCE_API_KEY,
-    process.env.BINANCE_SECRET_KEY,
-    { baseURL: 'https://api.binance.us' }
-);
-
+// Fetch real prices from Binance.us
 async function getPrices() {
     try {
-        const ticker = await client.tickerPrice();
-
-        const prices = {};
-        const pairs = {
-            BTCUSDT: 'BTC/USDT',
-            ETHUSDT: 'ETH/USDT',
-            SOLUSDT: 'SOL/USDT',
-            BNBUSDT: 'BNB/USDT',
-            XRPUSDT: 'XRP/USDT'
-        };
-
-        Object.entries(pairs).forEach(([symbol, label]) => {
-            const price = ticker.find(t => t.symbol === symbol);
-            prices[label] = {
-                price: price ? parseFloat(price.price) : 0,
-                change: 'N/A'
-            };
+        const response = await axios.get('https://api.binance.us/api/v3/ticker/price', {
+            params: { symbol: 'BTCUSDT' },
+            timeout: 10000
         });
 
-        return prices;
+        const btcPrice = parseFloat(response.data.price);
+
+        // Get other prices from CoinGecko (free fallback)
+        const coingecko = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+            params: {
+                ids: 'ethereum,solana,binancecoin,xrp',
+                vs_currencies: 'usd'
+            },
+            headers: { 'User-Agent': 'CryptoBot/1.0' },
+            timeout: 10000
+        });
+
+        const data = coingecko.data;
+
+        return {
+            'BTC/USDT': { price: btcPrice, change: 'N/A' },
+            'ETH/USDT': { price: data.ethereum?.usd || 0, change: 'N/A' },
+            'SOL/USDT': { price: data.solana?.usd || 0, change: 'N/A' },
+            'BNB/USDT': { price: data.binancecoin?.usd || 0, change: 'N/A' },
+            'XRP/USDT': { price: data.xrp?.usd || 0, change: 'N/A' }
+        };
     } catch (error) {
-        console.error('❌ Binance.us price fetch failed:', error.message);
+        console.error('❌ Price fetch failed:', error.message);
+        // Fallback prices
         return {
             'BTC/USDT': { price: 60000, change: 'N/A' },
             'ETH/USDT': { price: 3000, change: 'N/A' },
