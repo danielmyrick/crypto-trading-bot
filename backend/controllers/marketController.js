@@ -1,8 +1,5 @@
 // backend/controllers/marketController.js
-
-// Manually require the service
-const binanceService = require('../services/binanceService');
-const getPrices = binanceService.getPrices;
+const { getPrices } = require('../services/binanceService');
 
 let cachedPrices = {};
 let lastFetch = 0;
@@ -13,10 +10,9 @@ exports.getMarketData = async (req, res) => {
     // Refresh every 5 seconds
     if (now - lastFetch > 5000) {
         try {
-            const prices = await getPrices();
-            cachedPrices = prices;
+            cachedPrices = await getPrices();
             lastFetch = now;
-            console.log('✅ Prices updated:', Object.keys(prices));
+            console.log('✅ Prices updated:', Object.keys(cachedPrices));
         } catch (error) {
             console.error('❌ Price update failed:', error.message);
         }

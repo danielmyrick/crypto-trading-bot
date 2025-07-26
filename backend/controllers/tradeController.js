@@ -1,60 +1,26 @@
 // backend/controllers/tradeController.js
-// Using axios for HTTP requests instead of binance-api-node
-const axios = require('axios');
-
-// Mock Binance client for price data
-const getPrices = async () => {
-    try {
-        const response = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
-            params: {
-                ids: 'bitcoin,ethereum,solana,binancecoin,xrp',
-                vs_currencies: 'usd'
-            },
-            headers: { 'User-Agent': 'CryptoBot/1.0' },
-            timeout: 10000
-        });
-
-        const data = response.data;
-        return {
-            'BTC/USDT': { price: data.bitcoin?.usd || 60000, change: 'N/A' },
-            'ETH/USDT': { price: data.ethereum?.usd || 3000, change: 'N/A' },
-            'SOL/USDT': { price: data.solana?.usd || 150, change: 'N/A' },
-            'BNB/USDT': { price: data.binancecoin?.usd || 400, change: 'N/A' },
-            'XRP/USDT': { price: data.xrp?.usd || 0.5, change: 'N/A' }
-        };
-    } catch (error) {
-        console.error('Price fetch failed:', error.message);
-        return {
-            'BTC/USDT': { price: 60000, change: 'N/A' },
-            'ETH/USDT': { price: 3000, change: 'N/A' },
-            'SOL/USDT': { price: 150, change: 'N/A' },
-            'BNB/USDT': { price: 400, change: 'N/A' },
-            'XRP/USDT': { price: 0.5, change: 'N/A' }
-        };
-    }
-};
+const { getPrices } = require('../services/binanceService');
 
 let activePosition = null;
+let currentPrice = 0;
 
 // Buy BTC
 exports.buy = async (req, res) => {
-    const TRADE_SIZE = parseFloat(process.env.TRADE_SIZE || 40);
+    const TRADE_SIZE = parseFloat(process.env.TRADE_SIZE || 35);
 
     if (activePosition) {
         return res.json({ success: false, message: 'Already in position' });
     }
 
     try {
-        // Get current price from CoinGecko
         const prices = await getPrices();
-        const price = prices['BTC/USDT'].price;
+        currentPrice = prices['BTC/USDT'].price;
 
-        const qty = TRADE_SIZE / price;
+        const qty = TRADE_SIZE / currentPrice;
 
-        // Simulate order execution
         activePosition = {
             symbol: 'BTC/USDT',
-            buyPrice: price,
+            buyPrice: currentPrice,
             qty: qty,
             invested: TRADE_SIZE
         };
@@ -63,7 +29,7 @@ exports.buy = async (req, res) => {
 
         res.json({
             success: true,
-            message: `Bought $${TRADE_SIZE} of BTC at $${price.toFixed(2)}`,
+            message: `Bought $${TRADE_SIZE} of BTC at $${currentPrice.toFixed(2)}`,
             position: activePosition
         });
     } catch (error) {
@@ -71,7 +37,7 @@ exports.buy = async (req, res) => {
     }
 };
 
-// Sell logic remains the same
+// Sell at +4% or -2%
 exports.sell = async (req, res) => {
     if (!activePosition) {
         return res.json({ success: false, message: 'No active position' });
@@ -107,13 +73,13 @@ exports.sell = async (req, res) => {
             success: false,
             message: `Waiting: ${lossPct.toFixed(2)}% (need +4% or -2%)`
         });
-
     } catch (error) {
         console.error('Sell error:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 };
 
+// Get status
 exports.status = (req, res) => {
     res.json({ activePosition });
 };

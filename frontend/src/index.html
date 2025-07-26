@@ -180,7 +180,7 @@
             const pricesEl = document.getElementById('prices');
             const tradesEl = document.getElementById('trades');
 
-            // Debug: Check if elements are found
+            // Debug
             console.log('Elements:', { balanceEl, profitEl, toggleBtn, pricesEl, tradesEl });
             if (!toggleBtn) {
                 console.error('❌ #toggleBot not found! Check HTML');
@@ -207,11 +207,11 @@
                 const trade = document.createElement('div');
                 trade.className = 'trade';
                 trade.innerHTML = `
-        <span>${new Date().toLocaleTimeString()}</span>
-        <span>${pair}</span>
-        <span>${type}</span>
-        <span class="${pl.includes('-') ? 'loss' : 'profit'}">${pl}</span>
-      `;
+          <span>${new Date().toLocaleTimeString()}</span>
+          <span>${pair}</span>
+          <span>${type}</span>
+          <span class="${pl.includes('-') ? 'loss' : 'profit'}">${pl}</span>
+        `;
                 tradesEl.prepend(trade);
                 if (tradesEl.children.length > 10) {
                     tradesEl.removeChild(tradesEl.lastChild);
@@ -231,10 +231,10 @@
                         const item = document.createElement('div');
                         item.className = 'price-item';
                         item.innerHTML = `
-            <strong>${pair}</strong>
-            <span>$${info.price.toLocaleString()}</span>
-            <span class="${info.change?.startsWith('+') ? 'price-up' : 'price-down'}">${info.change}</span>
-          `;
+              <strong>${pair}</strong>
+              <span>$${info.price.toLocaleString()}</span>
+              <span class="${info.change?.startsWith('+') ? 'price-up' : 'price-down'}">${info.change}</span>
+            `;
                         pricesEl.appendChild(item);
                     });
                 } catch (err) {
@@ -288,8 +288,11 @@
                 }
             });
 
-            // Load prices on start and every 30 sec
+            // Load prices
             loadPrices();
             setInterval(loadPrices, 30000);
         });
     </script>
+</body>
+
+</html>

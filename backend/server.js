@@ -22,12 +22,12 @@ app.use(express.json());
 // Serve frontend
 const frontendPath = path.join(__dirname, '..', 'frontend', 'src');
 app.use('/dashboard', express.static(frontendPath));
-app.use(express.static(frontendPath)); // Serve at root
+app.use(express.static(frontendPath));
 
 // API Routes
 app.use('/api', routes);
 
-// Fallback: Always serve index.html for non-API routes
+// Fallback: Serve index.html for all non-API routes
 app.get('*', (req, res) => {
     if (req.path.startsWith('/api')) {
         return res.status(404).json({ error: 'API route not found' });
