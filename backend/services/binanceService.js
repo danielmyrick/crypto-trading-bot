@@ -1,19 +1,16 @@
 // backend/services/binanceService.js
 const { Spot } = require('@binance/connector');
 
-// Initialize Binance.us client
 const client = new Spot(
     process.env.BINANCE_API_KEY,
     process.env.BINANCE_SECRET_KEY,
     { baseURL: 'https://api.binance.us' }
 );
 
-// Fetch real prices
 async function getPrices() {
     try {
         const ticker = await client.tickerPrice();
 
-        // Convert to our format
         const prices = {};
         const pairs = {
             BTCUSDT: 'BTC/USDT',
