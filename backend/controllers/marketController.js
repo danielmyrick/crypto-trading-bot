@@ -7,8 +7,8 @@ let lastFetch = 0;
 exports.getMarketData = async (req, res) => {
     const now = Date.now();
 
-    // Refresh every 5 seconds
-    if (now - lastFetch > 5000) {
+    // Refresh every 30 seconds
+    if (now - lastFetch > 30000) {
         try {
             cachedPrices = await getPrices();
             lastFetch = now;
