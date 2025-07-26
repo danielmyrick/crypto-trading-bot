@@ -1,79 +1,287 @@
-// ✅ Auto Trading Loop
-let tradeInterval;
-let botRunning = false;
-let currentBalance = parseFloat(localStorage.getItem('botBalance') || 109);
-let totalProfit = parseFloat(localStorage.getItem('botTotalProfit') || 0);
+<!DOCTYPE html>
+<html lang="en">
 
-// ✅ Update balance display and save to browser
-function updateBalance() {
-balanceEl.textContent = currentBalance.toFixed(2);
-profitEl.textContent = `$${totalProfit.toFixed(2)}`;
-localStorage.setItem('botBalance', currentBalance);
-localStorage.setItem('botTotalProfit', totalProfit);
-}
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CryptoQuantum Bot</title>
+    <style>
+        :root {
+            --bg: #0f1620;
+            --card: #1a2238;
+            --text: #e0e0e0;
+            --accent: #6c63ff;
+            --green: #0f9d58;
+            --red: #db4437;
+        }
 
-// ✅ Log a trade to the dashboard
-function logTrade(type, pair, amount, pl) {
-const trade = document.createElement('div');
-trade.className = 'trade';
-trade.innerHTML = `
-<span>${new Date().toLocaleTimeString()}</span>
-<span>${pair}</span>
-<span>${type}</span>
-<span class="${pl.includes('-') ? 'loss' : 'profit'}">${pl}</span>
-`;
-tradesEl.prepend(trade);
-if (tradesEl.children.length > 10) {
-tradesEl.removeChild(tradesEl.lastChild);
-}
-}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-// ✅ Initialize display
-updateBalance();
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+        }
 
-// ✅ Start/Stop Bot
-toggleBtn.addEventListener('click', async () => {
-botRunning = !botRunning;
-toggleBtn.textContent = botRunning ? '⏹️ Stop Bot' : '▶️ Start Bot';
-toggleBtn.className = botRunning ? 'active' : 'inactive';
+        header {
+            text-align: center;
+            padding: 20px;
+        }
 
-if (botRunning) {
-alert('Bot started! Using $109 capital, $35/trade, 4% profit target.');
+        h1 {
+            background: linear-gradient(90deg, #6c63ff, #4285f4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5rem;
+        }
 
-tradeInterval = setInterval(async () => {
-try {
-const statusRes = await fetch('/api/status');
-const status = await statusRes.json();
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            margin-bottom: 40px;
+        }
 
-if (!status.activePosition) {
-// No position → try to buy if we have $35+
-if (currentBalance >= 35) {
-const buyRes = await fetch('/api/buy', { method: 'POST' });
-const buyData = await buyRes.json();
-if (buyData.success) {
-currentBalance -= 35;
-updateBalance();
-logTrade('BUY', 'BTC/USDT', 35, '—');
-}
-}
-} else {
-// In position → try to sell at +4%
-const sellRes = await fetch('/api/sell', { method: 'POST' });
-const sellData = await sellRes.json();
-if (sellData.success && sellData.profit) {
-const profit = sellData.profit;
-currentBalance += 35 + profit; // Get $35 back + profit
-totalProfit += profit;
-updateBalance();
-logTrade('SELL', 'BTC/USDT', 35 + profit, `+$${profit.toFixed(2)}`);
-}
-}
-} catch (err) {
-console.error('Auto-trade error:', err);
-}
-}, 30000); // Check every 30 seconds
-} else {
-clearInterval(tradeInterval);
-alert('Bot stopped.');
-}
-});
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .balance {
+            font-size: 1.8rem;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button.active {
+            background: var(--red);
+            color: white;
+        }
+
+        button.inactive {
+            background: var(--green);
+            color: white;
+        }
+
+        .price-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .price-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+        }
+
+        .price-up {
+            color: var(--green);
+        }
+
+        .price-down {
+            color: var(--red);
+        }
+
+        .trades {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .trade {
+            display: grid;
+            grid-template-columns: 80px 1fr 1fr 1fr;
+            gap: 10px;
+            font-size: 0.9rem;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .profit {
+            color: var(--green);
+        }
+
+        .loss {
+            color: var(--red);
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>CryptoQuantum Bot</h1>
+        <p>High-frequency trading engine</p>
+    </header>
+
+    <div class="container">
+        <!-- Left Side -->
+        <div>
+            <div class="card">
+                <div class="balance">$<span id="balance">109.00</span></div>
+                <div>Profit: <strong id="profit">$0</strong></div>
+                <button id="toggleBot" class="inactive">▶️ Start Bot</button>
+            </div>
+
+            <div class="card">
+                <h3>Active Strategy</h3>
+                <select id="strategy" style="width: 100%; padding: 8px; margin-top: 10px;">
+                    <option>Arbitrage</option>
+                    <option>Grid Trading</option>
+                    <option>DCA</option>
+                    <option>Scalping</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Right Side -->
+        <div>
+            <div class="card">
+                <h3>Market Prices</h3>
+                <div class="price-list" id="prices">
+                    <div>Loading...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Recent Trades</h3>
+                <div class="trades" id="trades"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Elements
+        const balanceEl = document.getElementById('balance');
+        const profitEl = document.getElementById('profit');
+        const toggleBtn = document.getElementById('toggleBot');
+        const pricesEl = document.getElementById('prices');
+        const tradesEl = document.getElementById('trades');
+
+        // ✅ Auto Trading Loop
+        let tradeInterval;
+        let botRunning = false;
+        let currentBalance = parseFloat(localStorage.getItem('botBalance') || 109);
+        let totalProfit = parseFloat(localStorage.getItem('botTotalProfit') || 0);
+
+        // ✅ Update balance display and save to browser
+        function updateBalance() {
+            balanceEl.textContent = currentBalance.toFixed(2);
+            profitEl.textContent = `$${totalProfit.toFixed(2)}`;
+            localStorage.setItem('botBalance', currentBalance);
+            localStorage.setItem('botTotalProfit', totalProfit);
+        }
+
+        // ✅ Log a trade to the dashboard
+        function logTrade(type, pair, amount, pl) {
+            const trade = document.createElement('div');
+            trade.className = 'trade';
+            trade.innerHTML = `
+        <span>${new Date().toLocaleTimeString()}</span>
+        <span>${pair}</span>
+        <span>${type}</span>
+        <span class="${pl.includes('-') ? 'loss' : 'profit'}">${pl}</span>
+      `;
+            tradesEl.prepend(trade);
+            if (tradesEl.children.length > 10) {
+                tradesEl.removeChild(tradesEl.lastChild);
+            }
+        }
+
+        // ✅ Initialize display
+        updateBalance();
+
+        // ✅ Load prices
+        async function loadPrices() {
+            try {
+                const res = await fetch('/api/market');
+                const data = await res.json();
+                pricesEl.innerHTML = '';
+                Object.entries(data).forEach(([pair, info]) => {
+                    const item = document.createElement('div');
+                    item.className = 'price-item';
+                    item.innerHTML = `
+            <strong>${pair}</strong>
+            <span>$${info.price.toLocaleString()}</span>
+            <span class="${info.change.startsWith('+') ? 'price-up' : 'price-down'}">${info.change}</span>
+          `;
+                    pricesEl.appendChild(item);
+                });
+            } catch (err) {
+                pricesEl.innerHTML = '<div>Failed to load prices</div>';
+            }
+        }
+
+        // ✅ Start/Stop Bot
+        toggleBtn.addEventListener('click', async () => {
+            botRunning = !botRunning;
+            toggleBtn.textContent = botRunning ? '⏹️ Stop Bot' : '▶️ Start Bot';
+            toggleBtn.className = botRunning ? 'active' : 'inactive';
+
+            if (botRunning) {
+                alert('Bot started! Using $109 capital, $35/trade, 4% profit target.');
+
+                tradeInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await fetch('/api/status');
+                        const status = await statusRes.json();
+
+                        if (!status.activePosition) {
+                            if (currentBalance >= 35) {
+                                const buyRes = await fetch('/api/buy', { method: 'POST' });
+                                const buyData = await buyRes.json();
+                                if (buyData.success) {
+                                    currentBalance -= 35;
+                                    updateBalance();
+                                    logTrade('BUY', 'BTC/USDT', 35, '—');
+                                }
+                            }
+                        } else {
+                            const sellRes = await fetch('/api/sell', { method: 'POST' });
+                            const sellData = await sellRes.json();
+                            if (sellData.success && sellData.profit) {
+                                const profit = sellData.profit;
+                                currentBalance += 35 + profit;
+                                totalProfit += profit;
+                                updateBalance();
+                                logTrade('SELL', 'BTC/USDT', 35 + profit, `+$${profit.toFixed(2)}`);
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Auto-trade error:', err);
+                    }
+                }, 30000);
+            } else {
+                clearInterval(tradeInterval);
+                alert('Bot stopped.');
+            }
+        });
+
+        // Load prices on start and every 30 sec
+        loadPrices();
+        setInterval(loadPrices, 30000);
+    </script>
+</body>
+
+</html>
