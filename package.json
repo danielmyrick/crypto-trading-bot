@@ -2,7 +2,7 @@
   "name": "crypto-trading-bot",
   "version": "1.0.0",
   "dependencies": {
-    "binance-api-node": "^1.8.3",
+    "@binance/connector": "^3.0.0",
     "axios": "^1.11.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
