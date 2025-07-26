@@ -19,10 +19,10 @@ app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 
-// Serve static files (dashboard)
+// Serve frontend
 const frontendPath = path.join(__dirname, '..', 'frontend', 'src');
 app.use('/dashboard', express.static(frontendPath));
-app.use('/', express.static(frontendPath)); // Serve index.html at root
+app.use(express.static(frontendPath)); // Serve at root
 
 // API Routes
 app.use('/api', routes);
