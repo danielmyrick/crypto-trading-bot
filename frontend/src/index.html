@@ -1,6 +1,7 @@
 // ✅ Auto Trading Loop
 let tradeInterval;
-let currentBalance = parseFloat(localStorage.getItem('botBalance') || 120);
+let botRunning = false;
+let currentBalance = parseFloat(localStorage.getItem('botBalance') || 109);
 let totalProfit = parseFloat(localStorage.getItem('botTotalProfit') || 0);
 
 // ✅ Update balance display and save to browser
@@ -37,34 +38,34 @@ toggleBtn.textContent = botRunning ? '⏹️ Stop Bot' : '▶️ Start Bot';
 toggleBtn.className = botRunning ? 'active' : 'inactive';
 
 if (botRunning) {
-alert('Bot started! Using $120 capital, $40/trade, 4% profit target.');
+alert('Bot started! Using $109 capital, $35/trade, 4% profit target.');
 
 tradeInterval = setInterval(async () => {
 try {
-const statusRes = await fetch('http://localhost:5000/api/status');
+const statusRes = await fetch('/api/status');
 const status = await statusRes.json();
 
 if (!status.activePosition) {
-// No position → try to buy if we have $40+
-if (currentBalance >= 40) {
-const buyRes = await fetch('http://localhost:5000/api/buy', { method: 'POST' });
+// No position → try to buy if we have $35+
+if (currentBalance >= 35) {
+const buyRes = await fetch('/api/buy', { method: 'POST' });
 const buyData = await buyRes.json();
 if (buyData.success) {
-currentBalance -= 40;
+currentBalance -= 35;
 updateBalance();
-logTrade('BUY', 'BTC/USDT', 40, '—');
+logTrade('BUY', 'BTC/USDT', 35, '—');
 }
 }
 } else {
 // In position → try to sell at +4%
-const sellRes = await fetch('http://localhost:5000/api/sell', { method: 'POST' });
+const sellRes = await fetch('/api/sell', { method: 'POST' });
 const sellData = await sellRes.json();
 if (sellData.success && sellData.profit) {
 const profit = sellData.profit;
-currentBalance += 40 + profit; // Get $40 back + profit
+currentBalance += 35 + profit; // Get $35 back + profit
 totalProfit += profit;
 updateBalance();
-logTrade('SELL', 'BTC/USDT', 40 + profit, `+$${profit.toFixed(2)}`);
+logTrade('SELL', 'BTC/USDT', 35 + profit, `+$${profit.toFixed(2)}`);
 }
 }
 } catch (err) {
