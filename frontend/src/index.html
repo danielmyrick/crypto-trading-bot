@@ -1,0 +1,78 @@
+// ✅ Auto Trading Loop
+let tradeInterval;
+let currentBalance = parseFloat(localStorage.getItem('botBalance') || 120);
+let totalProfit = parseFloat(localStorage.getItem('botTotalProfit') || 0);
+
+// ✅ Update balance display and save to browser
+function updateBalance() {
+balanceEl.textContent = currentBalance.toFixed(2);
+profitEl.textContent = `$${totalProfit.toFixed(2)}`;
+localStorage.setItem('botBalance', currentBalance);
+localStorage.setItem('botTotalProfit', totalProfit);
+}
+
+// ✅ Log a trade to the dashboard
+function logTrade(type, pair, amount, pl) {
+const trade = document.createElement('div');
+trade.className = 'trade';
+trade.innerHTML = `
+<span>${new Date().toLocaleTimeString()}</span>
+<span>${pair}</span>
+<span>${type}</span>
+<span class="${pl.includes('-') ? 'loss' : 'profit'}">${pl}</span>
+`;
+tradesEl.prepend(trade);
+if (tradesEl.children.length > 10) {
+tradesEl.removeChild(tradesEl.lastChild);
+}
+}
+
+// ✅ Initialize display
+updateBalance();
+
+// ✅ Start/Stop Bot
+toggleBtn.addEventListener('click', async () => {
+botRunning = !botRunning;
+toggleBtn.textContent = botRunning ? '⏹️ Stop Bot' : '▶️ Start Bot';
+toggleBtn.className = botRunning ? 'active' : 'inactive';
+
+if (botRunning) {
+alert('Bot started! Using $120 capital, $40/trade, 4% profit target.');
+
+tradeInterval = setInterval(async () => {
+try {
+const statusRes = await fetch('http://localhost:5000/api/status');
+const status = await statusRes.json();
+
+if (!status.activePosition) {
+// No position → try to buy if we have $40+
+if (currentBalance >= 40) {
+const buyRes = await fetch('http://localhost:5000/api/buy', { method: 'POST' });
+const buyData = await buyRes.json();
+if (buyData.success) {
+currentBalance -= 40;
+updateBalance();
+logTrade('BUY', 'BTC/USDT', 40, '—');
+}
+}
+} else {
+// In position → try to sell at +4%
+const sellRes = await fetch('http://localhost:5000/api/sell', { method: 'POST' });
+const sellData = await sellRes.json();
+if (sellData.success && sellData.profit) {
+const profit = sellData.profit;
+currentBalance += 40 + profit; // Get $40 back + profit
+totalProfit += profit;
+updateBalance();
+logTrade('SELL', 'BTC/USDT', 40 + profit, `+$${profit.toFixed(2)}`);
+}
+}
+} catch (err) {
+console.error('Auto-trade error:', err);
+}
+}, 30000); // Check every 30 seconds
+} else {
+clearInterval(tradeInterval);
+alert('Bot stopped.');
+}
+});

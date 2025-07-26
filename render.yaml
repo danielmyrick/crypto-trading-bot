@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: crypto-trading-bot
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: BINANCE_API_KEY
+        fromDatabaseSecret: BINANCE_API_KEY
+      - key: BINANCE_SECRET_KEY
+        fromDatabaseSecret: BINANCE_SECRET_KEY
+      - key: STARTING_BALANCE
+        value: 109
+      - key: TRADE_SIZE
+        value: 35
+      - key: TAKE_PROFIT_PCT
+        value: 4
+    disk:
+      name: data
+      mountPath: /var/data
