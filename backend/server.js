@@ -4,7 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const path = require('path');  // ← Added
+const path = require('path');
 
 // Import routes
 const routes = require('./routes');
@@ -19,15 +19,20 @@ app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 
+// Serve static files (dashboard)
+const frontendPath = path.join(__dirname, '..', 'frontend', 'src');
+app.use('/dashboard', express.static(frontendPath));
+app.use('/', express.static(frontendPath)); // Serve index.html at root
+
 // API Routes
 app.use('/api', routes);
 
-// Serve frontend dashboard — FIXED PATH
-app.use('/dashboard', express.static(path.join(__dirname, '..', 'frontend', 'src')));
-
-// Redirect root to dashboard
-app.get('/', (req, res) => {
-    res.redirect('/dashboard');
+// Fallback: Always serve index.html for non-API routes
+app.get('*', (req, res) => {
+    if (req.path.startsWith('/api')) {
+        return res.status(404).json({ error: 'API route not found' });
+    }
+    res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
 // Start server
