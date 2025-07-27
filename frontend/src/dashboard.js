@@ -23,12 +23,18 @@ document.addEventListener('DOMContentLoaded', function () {
     async function loadRealBalance() {
         try {
             const res = await fetch('/api/balance');
-            if (res.ok) {
-                const data = await res.json();
+            const contentType = res.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await res.text();
+                console.warn('Balance fetch failed: Not JSON', text);
+                return;
+            }
+            const data = await res.json();
+            if (data.usdt !== undefined) {
                 currentBalance = data.usdt;
             }
         } catch (err) {
-            console.warn('Using fallback balance');
+            console.warn('Using fallback balance after error:', err.message);
         }
         updateBalance();
     }
@@ -48,13 +54,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    updateBalance();
-    loadRealBalance();
-    setInterval(loadRealBalance, 30000);
-
     async function loadPrices() {
         try {
             const res = await fetch('/api/market');
+            const contentType = res.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await res.text();
+                console.error('Price fetch failed: Not JSON', text);
+                pricesEl.innerHTML = '<div>❌ Failed to load prices</div>';
+                return;
+            }
             const data = await res.json();
             pricesEl.innerHTML = '';
             Object.entries(data).forEach(([pair, info]) => {
@@ -68,6 +77,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 pricesEl.appendChild(item);
             });
         } catch (err) {
+            console.error('Failed to load prices:', err);
             pricesEl.innerHTML = '<div>❌ Failed to load prices</div>';
         }
     }
@@ -78,15 +88,30 @@ document.addEventListener('DOMContentLoaded', function () {
         toggleBtn.className = botRunning ? 'active' : 'inactive';
 
         if (botRunning) {
-            alert('Bot started! Using $109 capital, $35/trade, 4% profit target.');
+            alert('Bot started! Using $109 capital, $35/trade, 1% profit target.');
+
             tradeInterval = setInterval(async () => {
                 try {
                     const statusRes = await fetch('/api/status');
+                    const contentType = statusRes.headers.get('content-type');
+                    if (!contentType || !contentType.includes('application/json')) {
+                        const text = await statusRes.text();
+                        console.error('❌ Not JSON:', text);
+                        return;
+                    }
+
                     const status = await statusRes.json();
 
                     if (!status.activePosition) {
                         if (currentBalance >= 35) {
                             const buyRes = await fetch('/api/buy', { method: 'POST' });
+
+                            if (!buyRes.headers.get('content-type')?.includes('application/json')) {
+                                const text = await buyRes.text();
+                                console.error('❌ Buy response not JSON:', text);
+                                return;
+                            }
+
                             const buyData = await buyRes.json();
                             if (buyData.success) {
                                 currentBalance -= 35;
@@ -96,6 +121,13 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     } else {
                         const sellRes = await fetch('/api/sell', { method: 'POST' });
+
+                        if (!sellRes.headers.get('content-type')?.includes('application/json')) {
+                            const text = await sellRes.text();
+                            console.error('❌ Sell response not JSON:', text);
+                            return;
+                        }
+
                         const sellData = await sellRes.json();
                         if (sellData.success && sellData.profit) {
                             const profit = sellData.profit;
@@ -115,6 +147,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    // Initial load
+    updateBalance();
+    loadRealBalance();
     loadPrices();
+
+    // Refresh every 30 seconds
+    setInterval(loadRealBalance, 30000);
     setInterval(loadPrices, 30000);
 });
