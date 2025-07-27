@@ -11,61 +11,27 @@ function signRequest(query) {
 
 let activePosition = null;
 
-exports.buy = async (req, res) => {
-    const TRADE_SIZE = 35;
+// ✅ Safe quantity formatting
+const rawQty = TRADE_SIZE / currentPrice;
 
-    if (activePosition) {
-        return res.json({ success: false, message: 'Already in position' });
-    }
+// ✅ Ensure minimum size
+if (rawQty < 0.0001) {
+    return res.json({
+        success: false,
+        message: 'Trade size too small. Minimum 0.0001 BTC (~$11)'
+    });
+}
 
-    try {
-        const priceRes = await axios.get(`${BASE_URL}/api/v3/ticker/price`, {
-            params: { symbol: 'BTCUSDT' }
-        });
-        const price = parseFloat(priceRes.data.price);
-        const rawQty = TRADE_SIZE / price;
+// ✅ Round to 6 decimals (Binance limit for BTC)
+let qty = rawQty.toFixed(6);
 
-        // ✅ BTC minimum is ~0.0001
-        if (rawQty < 0.0001) {
-            throw new Error('Trade size too small');
-        }
+// ✅ Remove trailing zeros safely
+qty = qty.replace(/\.?0+$/, '');
 
-        // ✅ Round to 6 decimals (Binance limit)
-        const qty = rawQty.toFixed(6).replace(/\.?0+$/, '');
-
-        const params = new URLSearchParams({
-            symbol: 'BTCUSDT',
-            side: 'BUY',
-            type: 'MARKET',
-            quantity: qty,
-            timestamp: Date.now()
-        });
-        params.append('signature', signRequest(params.toString()));
-
-        const orderRes = await axios.post(`${BASE_URL}/api/v3/order`, params, {
-            headers: {
-                'X-MBX-APIKEY': API_KEY,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-        });
-
-        activePosition = {
-            symbol: 'BTCUSDT',
-            buyPrice: price,
-            qty: parseFloat(orderRes.data.executedQty),
-            invested: TRADE_SIZE
-        };
-
-        res.json({
-            success: true,
-            message: `Bought $${TRADE_SIZE} of BTC`,
-            position: activePosition
-        });
-    } catch (error) {
-        console.error('BUY ERROR:', error.response?.data || error.message);
-        res.status(500).json({ success: false, error: 'Buy failed' });
-    }
-};
+// ✅ Final validation
+if (!/^\d+(\.\d+)?$/.test(qty)) {
+    return res.json({ success: false, message: 'Invalid quantity format' });
+}
 
 exports.sell = async (req, res) => {
     if (!activePosition) {
