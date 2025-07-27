@@ -101,7 +101,8 @@ exports.sell = async (req, res) => {
 
         const takeProfitPct = 0.5; // Sell at +0.5%
         const stopLossPct = -1;   // Or -1%
-        if (true) { // Force sell regardless of profit/loss
+        // Revert to real logic
+        if (lossPct >= takeProfitPct || lossPct <= stopLossPct) {
             const rawQty = activePosition.qty;
             const stepSize = '0.00001000';
             let qty = roundToStepSize(rawQty, stepSize);
