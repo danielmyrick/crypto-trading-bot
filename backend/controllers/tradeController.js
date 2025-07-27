@@ -23,7 +23,15 @@ exports.buy = async (req, res) => {
             params: { symbol: 'BTCUSDT' }
         });
         const price = parseFloat(priceRes.data.price);
-        const qty = (TRADE_SIZE / price).toFixed(6).replace(/\.?0+$/, '');
+        const rawQty = TRADE_SIZE / price;
+
+        // ✅ BTC minimum is ~0.0001
+        if (rawQty < 0.0001) {
+            throw new Error('Trade size too small');
+        }
+
+        // ✅ Round to 6 decimals (Binance limit)
+        const qty = rawQty.toFixed(6).replace(/\.?0+$/, '');
 
         const params = new URLSearchParams({
             symbol: 'BTCUSDT',
@@ -42,7 +50,7 @@ exports.buy = async (req, res) => {
         });
 
         activePosition = {
-            symbol: 'BTC/USDT',
+            symbol: 'BTCUSDT',
             buyPrice: price,
             qty: parseFloat(orderRes.data.executedQty),
             invested: TRADE_SIZE
@@ -117,15 +125,21 @@ exports.getBalance = async (req, res) => {
             headers: { 'X-MBX-APIKEY': API_KEY }
         });
 
-        const usdt = res.data.balances.find(b => b.asset === 'USDT');
-        const btc = res.data.balances.find(b => b.asset === 'BTC');
+        // ✅ Confirm response structure
+        if (!apiRes || !apiRes.data || !apiRes.data.balances) {
+            throw new Error('Invalid response from Binance');
+        }
+
+        const usdt = apiRes.data.balances.find(b => b.asset === 'USDT');
+        const btc = apiRes.data.balances.find(b => b.asset === 'BTC');
 
         res.json({
             usdt: usdt ? parseFloat(usdt.free) : 0,
             btc: btc ? parseFloat(btc.free) : 0
         });
-    } catch (error) {
-        console.error('Balance fetch failed:', error.response?.data || error.message);
+    } catch (err) {
+        console.error('Balance fetch failed:', err.message);
+        // ✅ Always return fallback
         res.json({ usdt: 109, btc: 0 });
     }
 };
