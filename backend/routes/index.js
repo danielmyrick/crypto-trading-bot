@@ -8,5 +8,7 @@ router.get('/market', marketController.getMarketData);
 router.post('/buy', tradeController.buy);
 router.post('/sell', tradeController.sell);
 router.get('/status', tradeController.status);
+router.get('/market', marketController.getMarketData);
+router.get('/balance', tradeController.getBalance);
 
 module.exports = router;

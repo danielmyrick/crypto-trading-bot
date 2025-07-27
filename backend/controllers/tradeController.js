@@ -1,11 +1,11 @@
 // backend/controllers/tradeController.js
 const { Spot } = require('@binance/connector');
 
-// Initialize Binance.us client (✅ NO EXTRA SPACES)
+// Initialize Binance.us client 
 const client = new Spot(
     process.env.BINANCE_API_KEY,
     process.env.BINANCE_SECRET_KEY,
-    { baseURL: 'https://api.binance.us' } // ✅ Fixed: no spaces
+    { baseURL: 'https://api.binance.us' } // 
 );
 
 let activePosition = null;
@@ -23,18 +23,17 @@ exports.buy = async (req, res) => {
         const currentPrice = parseFloat(ticker.price);
         const rawQty = TRADE_SIZE / currentPrice;
 
-        // ✅ Safely format to 8 decimals and remove trailing zeros
+
         const qty = rawQty.toFixed(8).replace(/\.?0+$/, '');
 
-        // ✅ Validate it's a clean number string
+
         if (!/^\d+(\.\d+)?$/.test(qty)) {
             throw new Error('Invalid quantity format after cleanup');
         }
 
-        // ✅ Log for debugging
         console.log('🎯 Attempting to buy BTC with quantity:', qty);
 
-        // ✅ Place real order
+
         const order = await client.newOrder('BTCUSDT', 'BUY', 'MARKET', {
             quantity: qty
         });
@@ -114,4 +113,23 @@ exports.sell = async (req, res) => {
 // Status
 exports.status = (req, res) => {
     res.json({ activePosition });
+};
+// Get real account balance from Binance.us
+exports.getBalance = async (req, res) => {
+    try {
+        const accountInfo = await client.account();
+
+        // Find USDT balance
+        const usdt = accountInfo.balances.find(b => b.asset === 'USDT');
+        const btc = accountInfo.balances.find(b => b.asset === 'BTC');
+
+        res.json({
+            usdt: parseFloat(usdt.free),
+            btc: parseFloat(btc.free),
+            total: parseFloat(usdt.free) + (parseFloat(btc.free) * (await client.tickerPrice('BTCUSDT')).price)
+        });
+    } catch (error) {
+        console.error('❌ Balance fetch failed:', error.message);
+        res.status(500).json({ error: 'Failed to fetch balance' });
+    }
 };

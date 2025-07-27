@@ -24,10 +24,29 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateBalance() {
         balanceEl.textContent = currentBalance.toFixed(2);
         profitEl.textContent = `$${totalProfit.toFixed(2)}`;
-        localStorage.setItem('botBalance', currentBalance);
-        localStorage.setItem('botTotalProfit', totalProfit);
+    }
+    // ✅ Load real balance from Binance.us
+    async function loadRealBalance() {
+        try {
+            const res = await fetch('/api/balance');
+            const data = await res.json();
+
+            // Update global balance
+            currentBalance = data.usdt;
+            updateBalance(); // Update UI
+
+            console.log('✅ Real balance loaded:', data);
+        } catch (err) {
+            console.error('Failed to load real balance:', err);
+            // Fallback to localStorage if API fails
+            currentBalance = parseFloat(localStorage.getItem('botBalance') || 109);
+            updateBalance();
+        }
     }
 
+    // Load on start and every 30 seconds
+    loadRealBalance();
+    setInterval(loadRealBalance, 30000);
     // Log trade
     function logTrade(type, pair, amount, pl) {
         const trade = document.createElement('div');
