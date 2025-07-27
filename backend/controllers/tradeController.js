@@ -20,7 +20,7 @@ let activePosition = null;
 
 // ✅ Buy BTC/USDT
 exports.buy = async (req, res) => {
-    const TRADE_SIZE = 35; // $35 per trade
+    const TRADE_SIZE = 20; // $20 per trade
 
     if (activePosition) {
         return res.json({ success: false, message: 'Already in position' });
@@ -111,8 +111,7 @@ exports.sell = async (req, res) => {
         const currentPrice = parseFloat(priceRes.data.price);
         const buyPrice = activePosition.buyPrice;
         const lossPct = ((currentPrice - buyPrice) / buyPrice) * 100;
-
-        const takeProfitPct = 4;
+        const takeProfitPct = 1; // Sell at +1%
         const stopLossPct = -2;
 
         if (lossPct >= takeProfitPct || lossPct <= stopLossPct) {
