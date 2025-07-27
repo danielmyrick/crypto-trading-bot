@@ -10,6 +10,12 @@ function signRequest(query) {
     return crypto.createHmac('sha256', API_SECRET).update(query).digest('hex');
 }
 
+// ✅ Round quantity to stepSize
+function roundToStepSize(qty, stepSize) {
+    const precision = Math.floor(Math.log10(1 / parseFloat(stepSize)));
+    return (Math.floor(qty / parseFloat(stepSize)) * parseFloat(stepSize)).toFixed(precision);
+}
+
 let activePosition = null;
 
 // ✅ Buy BTC/USDT
@@ -21,30 +27,29 @@ exports.buy = async (req, res) => {
     }
 
     try {
-        // Get current price
         const priceRes = await axios.get(`${BASE_URL}/api/v3/ticker/price`, {
             params: { symbol: 'BTCUSDT' }
         });
-        const price = parseFloat(priceRes.data.price);
-        const rawQty = TRADE_SIZE / price;
+        const currentPrice = parseFloat(priceRes.data.price);
+        const rawQty = TRADE_SIZE / currentPrice;
 
-        // ✅ Minimum BTC order is 0.0001
-        if (rawQty < 0.0001) {
+        // ✅ Use LOT_SIZE rules from Binance
+        const stepSize = '0.00001000';
+        const minQty = 0.00001;
+
+        if (rawQty < minQty) {
             return res.json({
                 success: false,
-                message: 'Trade size too small. Minimum ~$11 at current price.'
+                message: 'Trade size too small. Minimum ~$1 at current price.'
             });
         }
 
-        // ✅ Format to 6 decimals and remove trailing zeros
-        let qty = rawQty.toFixed(6).replace(/\.?0+$/, '');
+        let qty = roundToStepSize(rawQty, stepSize);
 
-        // ✅ Final validation
         if (!/^\d+(\.\d+)?$/.test(qty)) {
             return res.json({ success: false, message: 'Invalid quantity format' });
         }
 
-        // ✅ Place order
         const params = new URLSearchParams({
             symbol: 'BTCUSDT',
             side: 'BUY',
@@ -61,10 +66,9 @@ exports.buy = async (req, res) => {
             }
         });
 
-        // ✅ Save position
         activePosition = {
             symbol: 'BTCUSDT',
-            buyPrice: price,
+            buyPrice: currentPrice,
             qty: parseFloat(orderRes.data.executedQty),
             invested: TRADE_SIZE
         };
@@ -99,7 +103,8 @@ exports.sell = async (req, res) => {
 
         if (lossPct >= takeProfitPct || lossPct <= stopLossPct) {
             const rawQty = activePosition.qty;
-            let qty = rawQty.toFixed(6).replace(/\.?0+$/, '');
+            const stepSize = '0.00001000';
+            let qty = roundToStepSize(rawQty, stepSize);
 
             if (!/^\d+(\.\d+)?$/.test(qty)) {
                 return res.json({ success: false, message: 'Invalid quantity format' });
