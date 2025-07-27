@@ -95,13 +95,15 @@ exports.buy = async (req, res) => {
     }
 };
 
-// ✅ Sell BTC/USDT
 exports.sell = async (req, res) => {
+    // ✅ LOG 1: Check if position exists
+    console.log('🔍 Checking activePosition:', activePosition);
     if (!activePosition) {
         return res.json({ success: false, message: 'No active position' });
     }
 
     try {
+        // ✅ LOG 2: Get current price
         const priceRes = await axios.get(`${BASE_URL}/api/v3/ticker/price`, {
             params: { symbol: 'BTCUSDT' }
         });
@@ -109,12 +111,14 @@ exports.sell = async (req, res) => {
         const buyPrice = activePosition.buyPrice;
         const lossPct = ((currentPrice - buyPrice) / buyPrice) * 100;
 
+        console.log('📊 Price check:', { buyPrice, currentPrice, lossPct: lossPct.toFixed(2) + '%' });
+
         const takeProfitPct = 1;
         const stopLossPct = -2;
 
         if (lossPct >= takeProfitPct || lossPct <= stopLossPct) {
             const rawQty = activePosition.qty;
-            const stepSize = '0.00001000'; // ✅ Exact
+            const stepSize = '0.00001000'; // ✅ Exact from Binance
             let qty = roundToStepSize(rawQty, stepSize);
 
             if (!/^\d+(\.\d+)?$/.test(qty)) {
@@ -122,6 +126,7 @@ exports.sell = async (req, res) => {
                 return res.json({ success: false, message: 'Invalid quantity format' });
             }
 
+            // ✅ LOG 3: Attempting real sell
             console.log('🎯 Attempting SELL with quantity:', qty);
 
             const params = new URLSearchParams({
@@ -140,6 +145,7 @@ exports.sell = async (req, res) => {
                 }
             });
 
+            // ✅ LOG 4: Real sell succeeded
             console.log('✅ REAL SELL ORDER:', orderRes.data);
 
             const soldValue = currentPrice * activePosition.qty;
@@ -156,13 +162,15 @@ exports.sell = async (req, res) => {
             });
         }
 
+        // ✅ LOG 5: Holding
+        console.log('⏳ Holding: not at target', { lossPct: lossPct.toFixed(2) });
         return res.json({ success: false, message: `Waiting: ${lossPct.toFixed(2)}%` });
     } catch (error) {
+        // ✅ LOG 6: Full error
         console.error('❌ Sell error:', error.response?.data || error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 };
-
 // ✅ Status
 exports.status = (req, res) => {
     res.json({ activePosition });
