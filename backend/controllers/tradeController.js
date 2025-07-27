@@ -99,9 +99,8 @@ exports.sell = async (req, res) => {
 
         console.log('📊 Price check:', { buyPrice, currentPrice, lossPct: lossPct.toFixed(2) + '%' });
 
-        const takeProfitPct = 1;
-        const stopLossPct = -2;
-
+        const takeProfitPct = 0.5; // Sell at +0.5%
+        const stopLossPct = -1;   // Or -1%
         if (lossPct >= takeProfitPct || lossPct <= stopLossPct) {
             const rawQty = activePosition.qty;
             const stepSize = '0.00001000';
