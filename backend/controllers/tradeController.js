@@ -112,7 +112,7 @@ exports.getBalance = async (req, res) => {
         const params = new URLSearchParams({ timestamp: Date.now() });
         params.append('signature', signRequest(params.toString()));
 
-        const res = await axios.get(`${BASE_URL}/api/v3/account`, {
+        const apiRes = await axios.get(`${BASE_URL}/api/v3/account`, {
             params,
             headers: { 'X-MBX-APIKEY': API_KEY }
         });
