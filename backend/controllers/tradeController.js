@@ -23,16 +23,17 @@ exports.buy = async (req, res) => {
         const currentPrice = parseFloat(ticker.price);
         const rawQty = TRADE_SIZE / currentPrice;
 
+        // ✅ Safe quantity formatting
+        let qty = rawQty.toFixed(8); // Up to 8 decimals
+        qty = qty.replace(/\.?0+$/, ''); // Remove trailing zeros
 
-        const qty = rawQty.toFixed(8).replace(/\.?0+$/, '');
-
-
+        // ✅ Final validation: must be digits, optional dot, digits
         if (!/^\d+(\.\d+)?$/.test(qty)) {
             throw new Error('Invalid quantity format after cleanup');
         }
 
-        console.log('🎯 Attempting to buy BTC with quantity:', qty);
-
+        // ✅ Log for debugging
+        console.log('🎯 Attempting BUY with quantity:', qty);
 
         const order = await client.newOrder('BTCUSDT', 'BUY', 'MARKET', {
             quantity: qty
@@ -77,13 +78,14 @@ exports.sell = async (req, res) => {
 
         if (lossPct >= takeProfitPct || lossPct <= stopLossPct) {
             const rawQty = activePosition.qty;
-            const qty = rawQty.toFixed(8).replace(/\.?0+$/, '');
+            let qty = rawQty.toFixed(8);
+            qty = qty.replace(/\.?0+$/, '');
 
             if (!/^\d+(\.\d+)?$/.test(qty)) {
                 throw new Error('Invalid quantity format after cleanup');
             }
 
-            console.log('🎯 Attempting to sell BTC with quantity:', qty);
+            console.log('🎯 Attempting SELL with quantity:', qty);
 
             const order = await client.newOrder('BTCUSDT', 'SELL', 'MARKET', { quantity: qty });
 
@@ -109,7 +111,6 @@ exports.sell = async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
-
 // Status
 exports.status = (req, res) => {
     res.json({ activePosition });
