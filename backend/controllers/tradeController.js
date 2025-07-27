@@ -22,12 +22,17 @@ exports.buy = async (req, res) => {
         const ticker = await client.tickerPrice('BTCUSDT');
         const currentPrice = parseFloat(ticker.price);
         const rawQty = TRADE_SIZE / currentPrice;
-        const qty = rawQty.toFixed(8); // ✅ 8 decimals
 
-        // ✅ Validate format
-        if (!/^[0-9]+\.[0-9]+$|^[0-9]+$/.test(qty)) {
-            throw new Error('Quantity format invalid');
+        // ✅ Safely format to 8 decimals and remove trailing zeros
+        const qty = rawQty.toFixed(8).replace(/\.?0+$/, '');
+
+        // ✅ Validate it's a clean number string
+        if (!/^\d+(\.\d+)?$/.test(qty)) {
+            throw new Error('Invalid quantity format after cleanup');
         }
+
+        // ✅ Log for debugging
+        console.log('🎯 Attempting to buy BTC with quantity:', qty);
 
         // ✅ Place real order
         const order = await client.newOrder('BTCUSDT', 'BUY', 'MARKET', {
@@ -47,7 +52,7 @@ exports.buy = async (req, res) => {
 
         res.json({
             success: true,
-            message: `Bought $${TRADE_SIZE} of BTC at $${currentPrice}`,
+            message: `Bought $${TRADE_SIZE} of BTC at $${currentPrice.toFixed(2)}`,
             position: activePosition
         });
     } catch (error) {
@@ -73,14 +78,14 @@ exports.sell = async (req, res) => {
 
         if (lossPct >= takeProfitPct || lossPct <= stopLossPct) {
             const rawQty = activePosition.qty;
-            const qty = rawQty.toFixed(8); // ✅ 8 decimals (was 6)
+            const qty = rawQty.toFixed(8).replace(/\.?0+$/, '');
 
-            // ✅ Validate format
-            if (!/^[0-9]+\.[0-9]+$|^[0-9]+$/.test(qty)) {
-                throw new Error('Quantity format invalid');
+            if (!/^\d+(\.\d+)?$/.test(qty)) {
+                throw new Error('Invalid quantity format after cleanup');
             }
 
-            // ✅ Place real order
+            console.log('🎯 Attempting to sell BTC with quantity:', qty);
+
             const order = await client.newOrder('BTCUSDT', 'SELL', 'MARKET', { quantity: qty });
 
             const soldValue = currentPrice * activePosition.qty;
