@@ -1,29 +1,18 @@
 document.addEventListener('DOMContentLoaded', function () {
-    // Elements
     const balanceEl = document.getElementById('balance');
     const profitEl = document.getElementById('profit');
     const toggleBtn = document.getElementById('toggleBot');
     const pricesEl = document.getElementById('prices');
     const tradesEl = document.getElementById('trades');
 
-    // Debug
-    console.log('Elements:', { balanceEl, profitEl, toggleBtn, pricesEl, tradesEl });
-    if (!toggleBtn) {
-        console.error('❌ #toggleBot not found! Check HTML');
-        alert('Dashboard failed to load. Refresh and check console.');
-        return;
-    }
-
-    // State
     let tradeInterval;
     let botRunning = false;
     let currentBalance = parseFloat(localStorage.getItem('botBalance') || 109);
     let totalProfit = parseFloat(localStorage.getItem('botTotalProfit') || 0);
 
-    // Update balance
     function updateBalance() {
         if (typeof currentBalance !== 'number' || isNaN(currentBalance)) {
-            currentBalance = parseFloat(localStorage.getItem('botBalance') || 109);
+            currentBalance = 109;
         }
         balanceEl.textContent = currentBalance.toFixed(2);
         profitEl.textContent = `$${totalProfit.toFixed(2)}`;
@@ -31,31 +20,19 @@ document.addEventListener('DOMContentLoaded', function () {
         localStorage.setItem('botTotalProfit', totalProfit);
     }
 
-    // Load real balance from Binance.us
     async function loadRealBalance() {
         try {
             const res = await fetch('/api/balance');
-            let usdtBalance = 109;
-
             if (res.ok) {
                 const data = await res.json();
-                usdtBalance = (data && typeof data.usdt === 'number')
-                    ? data.usdt
-                    : parseFloat(localStorage.getItem('botBalance') || 109);
-            } else {
-                console.warn('Balance API error, using fallback');
+                currentBalance = data.usdt;
             }
-
-            currentBalance = usdtBalance;
-            updateBalance();
         } catch (err) {
-            console.error('Failed to load balance:', err);
-            currentBalance = parseFloat(localStorage.getItem('botBalance') || 109);
-            updateBalance();
+            console.warn('Using fallback balance');
         }
+        updateBalance();
     }
 
-    // Log trade
     function logTrade(type, pair, amount, pl) {
         const trade = document.createElement('div');
         trade.className = 'trade';
@@ -71,12 +48,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Initialize
     updateBalance();
     loadRealBalance();
     setInterval(loadRealBalance, 30000);
 
-    // Load prices
     async function loadPrices() {
         try {
             const res = await fetch('/api/market');
@@ -93,12 +68,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 pricesEl.appendChild(item);
             });
         } catch (err) {
-            console.error('Failed to load prices:', err);
             pricesEl.innerHTML = '<div>❌ Failed to load prices</div>';
         }
     }
 
-    // Start/Stop Bot
     toggleBtn.addEventListener('click', async () => {
         botRunning = !botRunning;
         toggleBtn.textContent = botRunning ? '⏹️ Stop Bot' : '▶️ Start Bot';
@@ -106,7 +79,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (botRunning) {
             alert('Bot started! Using $109 capital, $35/trade, 4% profit target.');
-
             tradeInterval = setInterval(async () => {
                 try {
                     const statusRes = await fetch('/api/status');
@@ -143,7 +115,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Load prices on start and every 30 sec
     loadPrices();
     setInterval(loadPrices, 30000);
 });

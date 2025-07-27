@@ -1,13 +1,15 @@
 {
+  "name": "crypto-trading-bot",
+  "version": "1.0.0",
   "dependencies": {
-    "@binance/connector": "^3.0.0",
     "axios": "^1.11.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^4.18.2",
     "helmet": "^7.0.0",
-    "morgan": "^1.10.0",
-    "sequelize": "^6.37.7",
-    "sqlite3": "^5.1.7"
+    "morgan": "^1.10.0"
+  },
+  "scripts": {
+    "start": "node backend/server.js"
   }
 }
