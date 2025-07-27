@@ -4,7 +4,7 @@ const crypto = require('crypto');
 
 const API_KEY = process.env.BINANCE_API_KEY;
 const API_SECRET = process.env.BINANCE_SECRET_KEY;
-const BASE_URL = 'https://api.binance.us';
+const BASE_URL = 'https://api.binance.us'; // ✅ No extra spaces
 
 function signRequest(query) {
     return crypto.createHmac('sha256', API_SECRET).update(query).digest('hex');
@@ -38,7 +38,7 @@ exports.buy = async (req, res) => {
         const lotSize = {
             minQty: 0.00001,
             maxQty: 9000,
-            stepSize: '0.00001000'
+            stepSize: '0.00001000' // ✅ Exact from Binance
         };
 
         if (rawQty < lotSize.minQty) {
@@ -54,13 +54,10 @@ exports.buy = async (req, res) => {
             return res.json({ success: false, message: 'Invalid quantity format' });
         }
 
-        // ✅ Apply MIN_NOTIONAL filter (min $1)
+        // ✅ Apply MIN_NOTIONAL
         if (TRADE_SIZE < 1.0) {
-            return res.json({ success: false, message: 'Order value below minimum notional (1.0 USDT)' });
+            return res.json({ success: false, message: 'Order value below minimum notional' });
         }
-
-        // ✅ Apply PRICE_FILTER (not needed for market orders)
-        // But price must be valid if used — tickSize 0.01 is fine
 
         // ✅ Place market order
         const params = new URLSearchParams({
@@ -79,7 +76,7 @@ exports.buy = async (req, res) => {
             }
         });
 
-        // ✅ Save position
+        // ✅ Save position with real executed quantity
         activePosition = {
             symbol: 'BTCUSDT',
             buyPrice: currentPrice,
@@ -98,6 +95,7 @@ exports.buy = async (req, res) => {
     }
 };
 
+// ✅ Sell BTC/USDT
 exports.sell = async (req, res) => {
     if (!activePosition) {
         return res.json({ success: false, message: 'No active position' });
@@ -111,12 +109,12 @@ exports.sell = async (req, res) => {
         const buyPrice = activePosition.buyPrice;
         const lossPct = ((currentPrice - buyPrice) / buyPrice) * 100;
 
-        const takeProfitPct = 1; // Now 1%
+        const takeProfitPct = 1;
         const stopLossPct = -2;
 
         if (lossPct >= takeProfitPct || lossPct <= stopLossPct) {
             const rawQty = activePosition.qty;
-            const stepSize = '0.00001';
+            const stepSize = '0.00001000'; // ✅ Exact
             let qty = roundToStepSize(rawQty, stepSize);
 
             if (!/^\d+(\.\d+)?$/.test(qty)) {
@@ -124,7 +122,7 @@ exports.sell = async (req, res) => {
                 return res.json({ success: false, message: 'Invalid quantity format' });
             }
 
-            console.log('🎯 Attempting SELL with quantity:', qty); // 🔥 Log it
+            console.log('🎯 Attempting SELL with quantity:', qty);
 
             const params = new URLSearchParams({
                 symbol: 'BTCUSDT',
@@ -142,7 +140,7 @@ exports.sell = async (req, res) => {
                 }
             });
 
-            console.log('✅ REAL SELL ORDER:', orderRes.data); // 🔥 Confirm it
+            console.log('✅ REAL SELL ORDER:', orderRes.data);
 
             const soldValue = currentPrice * activePosition.qty;
             const profit = soldValue - activePosition.invested;
