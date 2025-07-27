@@ -10,7 +10,6 @@ function signRequest(query) {
     return crypto.createHmac('sha256', API_SECRET).update(query).digest('hex');
 }
 
-// ✅ Round quantity to stepSize
 function roundToStepSize(qty, stepSize) {
     const precision = Math.floor(Math.log10(1 / parseFloat(stepSize)));
     return (Math.floor(qty / parseFloat(stepSize)) * parseFloat(stepSize)).toFixed(precision);
@@ -20,46 +19,33 @@ let activePosition = null;
 
 // ✅ Buy BTC/USDT
 exports.buy = async (req, res) => {
-    const TRADE_SIZE = 20; // $20 per trade
+    const TRADE_SIZE = 20;
 
     if (activePosition) {
+        console.log('❌ Already in position:', activePosition);
         return res.json({ success: false, message: 'Already in position' });
     }
 
     try {
-        // Get current price
         const priceRes = await axios.get(`${BASE_URL}/api/v3/ticker/price`, {
             params: { symbol: 'BTCUSDT' }
         });
         const currentPrice = parseFloat(priceRes.data.price);
         const rawQty = TRADE_SIZE / currentPrice;
 
-        // ✅ Apply LOT_SIZE filter
-        const lotSize = {
-            minQty: 0.00001,
-            maxQty: 9000,
-            stepSize: '0.00001000' // ✅ Exact from Binance
-        };
-
-        if (rawQty < lotSize.minQty) {
-            return res.json({
-                success: false,
-                message: 'Trade size too small. Minimum ~$1 at current price.'
-            });
+        if (rawQty < 0.00001) {
+            return res.json({ success: false, message: 'Trade size too small' });
         }
 
-        let qty = roundToStepSize(rawQty, lotSize.stepSize);
+        const stepSize = '0.00001000';
+        let qty = roundToStepSize(rawQty, stepSize);
 
         if (!/^\d+(\.\d+)?$/.test(qty)) {
             return res.json({ success: false, message: 'Invalid quantity format' });
         }
 
-        // ✅ Apply MIN_NOTIONAL
-        if (TRADE_SIZE < 1.0) {
-            return res.json({ success: false, message: 'Order value below minimum notional' });
-        }
+        console.log('🎯 Attempting BUY with quantity:', qty);
 
-        // ✅ Place market order
         const params = new URLSearchParams({
             symbol: 'BTCUSDT',
             side: 'BUY',
@@ -76,7 +62,8 @@ exports.buy = async (req, res) => {
             }
         });
 
-        // ✅ Save position with real executed quantity
+        console.log('✅ REAL BUY ORDER:', orderRes.data);
+
         activePosition = {
             symbol: 'BTCUSDT',
             buyPrice: currentPrice,
@@ -90,20 +77,19 @@ exports.buy = async (req, res) => {
             position: activePosition
         });
     } catch (error) {
-        console.error('BUY ERROR:', error.response?.data || error.message);
-        res.status(500).json({ success: false, error: 'Buy failed' });
+        console.error('❌ BUY ERROR:', error.response?.data || error.message);
+        res.status(500).json({ success: false, error: error.message });
     }
 };
 
+// ✅ Sell BTC/USDT
 exports.sell = async (req, res) => {
-    // ✅ LOG 1: Check if position exists
     console.log('🔍 Checking activePosition:', activePosition);
     if (!activePosition) {
         return res.json({ success: false, message: 'No active position' });
     }
 
     try {
-        // ✅ LOG 2: Get current price
         const priceRes = await axios.get(`${BASE_URL}/api/v3/ticker/price`, {
             params: { symbol: 'BTCUSDT' }
         });
@@ -118,7 +104,7 @@ exports.sell = async (req, res) => {
 
         if (lossPct >= takeProfitPct || lossPct <= stopLossPct) {
             const rawQty = activePosition.qty;
-            const stepSize = '0.00001000'; // ✅ Exact from Binance
+            const stepSize = '0.00001000';
             let qty = roundToStepSize(rawQty, stepSize);
 
             if (!/^\d+(\.\d+)?$/.test(qty)) {
@@ -126,7 +112,6 @@ exports.sell = async (req, res) => {
                 return res.json({ success: false, message: 'Invalid quantity format' });
             }
 
-            // ✅ LOG 3: Attempting real sell
             console.log('🎯 Attempting SELL with quantity:', qty);
 
             const params = new URLSearchParams({
@@ -145,7 +130,6 @@ exports.sell = async (req, res) => {
                 }
             });
 
-            // ✅ LOG 4: Real sell succeeded
             console.log('✅ REAL SELL ORDER:', orderRes.data);
 
             const soldValue = currentPrice * activePosition.qty;
@@ -162,15 +146,14 @@ exports.sell = async (req, res) => {
             });
         }
 
-        // ✅ LOG 5: Holding
         console.log('⏳ Holding: not at target', { lossPct: lossPct.toFixed(2) });
         return res.json({ success: false, message: `Waiting: ${lossPct.toFixed(2)}%` });
     } catch (error) {
-        // ✅ LOG 6: Full error
         console.error('❌ Sell error:', error.response?.data || error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 };
+
 // ✅ Status
 exports.status = (req, res) => {
     res.json({ activePosition });
