@@ -4,7 +4,7 @@ const crypto = require('crypto');
 
 const API_KEY = process.env.BINANCE_API_KEY;
 const API_SECRET = process.env.BINANCE_SECRET_KEY;
-const BASE_URL = 'https://api.binance.us'; // 
+const BASE_URL = 'https://api.binance.us'; // ✅ No spaces
 
 function signRequest(query) {
     return crypto.createHmac('sha256', API_SECRET).update(query).digest('hex');
@@ -12,7 +12,7 @@ function signRequest(query) {
 
 let activePosition = null;
 
-//  Buy BTC/USDT
+// ✅ Buy BTC/USDT
 exports.buy = async (req, res) => {
     const TRADE_SIZE = 35; // $35 per trade
 
@@ -21,29 +21,30 @@ exports.buy = async (req, res) => {
     }
 
     try {
+        // Get current price
         const priceRes = await axios.get(`${BASE_URL}/api/v3/ticker/price`, {
             params: { symbol: 'BTCUSDT' }
         });
-        const currentPrice = parseFloat(priceRes.data.price);
-        const rawQty = TRADE_SIZE / currentPrice;
+        const price = parseFloat(priceRes.data.price);
+        const rawQty = TRADE_SIZE / price;
 
-        //  Ensure minimum size
+        // ✅ Minimum BTC order is 0.0001
         if (rawQty < 0.0001) {
             return res.json({
                 success: false,
-                message: 'Trade size too small. Minimum 0.0001 BTC (~$11)'
+                message: 'Trade size too small. Minimum ~$11 at current price.'
             });
         }
 
-        //  Round to 6 decimals
+        // ✅ Format to 6 decimals and remove trailing zeros
         let qty = rawQty.toFixed(6).replace(/\.?0+$/, '');
 
-        //  Validate format
+        // ✅ Final validation
         if (!/^\d+(\.\d+)?$/.test(qty)) {
             return res.json({ success: false, message: 'Invalid quantity format' });
         }
 
-        //  Place market order
+        // ✅ Place order
         const params = new URLSearchParams({
             symbol: 'BTCUSDT',
             side: 'BUY',
@@ -60,9 +61,10 @@ exports.buy = async (req, res) => {
             }
         });
 
+        // ✅ Save position
         activePosition = {
             symbol: 'BTCUSDT',
-            buyPrice: currentPrice,
+            buyPrice: price,
             qty: parseFloat(orderRes.data.executedQty),
             invested: TRADE_SIZE
         };
@@ -78,7 +80,7 @@ exports.buy = async (req, res) => {
     }
 };
 
-//  Sell BTC/USDT
+// ✅ Sell BTC/USDT
 exports.sell = async (req, res) => {
     if (!activePosition) {
         return res.json({ success: false, message: 'No active position' });
@@ -139,12 +141,12 @@ exports.sell = async (req, res) => {
     }
 };
 
-//  Get bot status
+// ✅ Status
 exports.status = (req, res) => {
     res.json({ activePosition });
 };
 
-//  Get real balance from Binance.us
+// ✅ Balance
 exports.getBalance = async (req, res) => {
     try {
         const params = new URLSearchParams({ timestamp: Date.now() });
@@ -156,7 +158,7 @@ exports.getBalance = async (req, res) => {
         });
 
         if (!apiRes.data || !apiRes.data.balances) {
-            throw new Error('Invalid response from Binance');
+            throw new Error('Invalid response');
         }
 
         const usdt = apiRes.data.balances.find(b => b.asset === 'USDT');
@@ -168,6 +170,6 @@ exports.getBalance = async (req, res) => {
         });
     } catch (err) {
         console.error('Balance fetch failed:', err.message);
-        res.json({ usdt: 109, btc: 0 }); // Safe fallback
+        res.json({ usdt: 109, btc: 0 });
     }
 };
