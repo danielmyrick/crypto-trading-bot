@@ -1,11 +1,11 @@
 // backend/controllers/tradeController.js
 const { Spot } = require('@binance/connector');
 
-// Initialize Binance.us client
+// Initialize Binance.us client (✅ NO EXTRA SPACES)
 const client = new Spot(
     process.env.BINANCE_API_KEY,
     process.env.BINANCE_SECRET_KEY,
-    { baseURL: 'https://api.binance.us' }
+    { baseURL: 'https://api.binance.us' } // ✅ Fixed: no spaces
 );
 
 let activePosition = null;
@@ -21,10 +21,18 @@ exports.buy = async (req, res) => {
     try {
         const ticker = await client.tickerPrice('BTCUSDT');
         const currentPrice = parseFloat(ticker.price);
-        const qty = (TRADE_SIZE / currentPrice).toFixed(6); // Binance requires precision
+        const rawQty = TRADE_SIZE / currentPrice;
+        const qty = rawQty.toFixed(8); // ✅ 8 decimals
 
-        // ✅ REAL MARKET ORDER
-        const order = await client.newOrder('BTCUSDT', 'BUY', 'MARKET', { quantity: qty });
+        // ✅ Validate format
+        if (!/^[0-9]+\.[0-9]+$|^[0-9]+$/.test(qty)) {
+            throw new Error('Quantity format invalid');
+        }
+
+        // ✅ Place real order
+        const order = await client.newOrder('BTCUSDT', 'BUY', 'MARKET', {
+            quantity: qty
+        });
 
         activePosition = {
             symbol: 'BTC/USDT',
@@ -64,15 +72,21 @@ exports.sell = async (req, res) => {
         const stopLossPct = -2;
 
         if (lossPct >= takeProfitPct || lossPct <= stopLossPct) {
-            const qty = activePosition.qty.toFixed(6);
+            const rawQty = activePosition.qty;
+            const qty = rawQty.toFixed(8); // ✅ 8 decimals (was 6)
 
-            // ✅ REAL MARKET SELL
+            // ✅ Validate format
+            if (!/^[0-9]+\.[0-9]+$|^[0-9]+$/.test(qty)) {
+                throw new Error('Quantity format invalid');
+            }
+
+            // ✅ Place real order
             const order = await client.newOrder('BTCUSDT', 'SELL', 'MARKET', { quantity: qty });
 
             const soldValue = currentPrice * activePosition.qty;
             const profit = soldValue - activePosition.invested;
 
-            console.log(`✅ REAL SELL ORDER: ${order}`);
+            console.log('✅ REAL SELL ORDER:', order);
             const position = { ...activePosition };
             activePosition = null;
 
