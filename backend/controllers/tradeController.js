@@ -4,16 +4,17 @@ const crypto = require('crypto');
 
 const API_KEY = process.env.BINANCE_API_KEY;
 const API_SECRET = process.env.BINANCE_SECRET_KEY;
-const BASE_URL = 'https://api.binance.us'; // ✅ No spaces
+const BASE_URL = 'https://api.binance.us'; // ✅ No extra spaces
 
+// ✅ HMAC signing for Binance API
 function signRequest(query) {
     return crypto.createHmac('sha256', API_SECRET).update(query).digest('hex');
 }
 
-// ✅ Round quantity to stepSize
+// ✅ Round quantity to stepSize (0.00001 for BTC/USDT)
 function roundToStepSize(qty, stepSize) {
-    const precision = Math.floor(Math.log10(1 / parseFloat(stepSize)));
-    return (Math.floor(qty / parseFloat(stepSize)) * parseFloat(stepSize)).toFixed(precision);
+    const multiplier = 1 / parseFloat(stepSize);
+    return (Math.floor(qty * multiplier) / multiplier).toFixed(8).replace(/\.?0+$/, '');
 }
 
 let activePosition = null;
@@ -27,29 +28,31 @@ exports.buy = async (req, res) => {
     }
 
     try {
+        // Get current price
         const priceRes = await axios.get(`${BASE_URL}/api/v3/ticker/price`, {
             params: { symbol: 'BTCUSDT' }
         });
         const currentPrice = parseFloat(priceRes.data.price);
         const rawQty = TRADE_SIZE / currentPrice;
 
-        // ✅ Use LOT_SIZE rules from Binance
-        const stepSize = '0.00001000';
-        const minQty = 0.00001;
-
-        if (rawQty < minQty) {
+        // ✅ Minimum order size: 0.00001 BTC (~$1 at $100k)
+        if (rawQty < 0.00001) {
             return res.json({
                 success: false,
                 message: 'Trade size too small. Minimum ~$1 at current price.'
             });
         }
 
+        // ✅ Round to valid step size
+        const stepSize = '0.00001';
         let qty = roundToStepSize(rawQty, stepSize);
 
+        // ✅ Final validation
         if (!/^\d+(\.\d+)?$/.test(qty)) {
             return res.json({ success: false, message: 'Invalid quantity format' });
         }
 
+        // ✅ Place market order
         const params = new URLSearchParams({
             symbol: 'BTCUSDT',
             side: 'BUY',
@@ -66,6 +69,7 @@ exports.buy = async (req, res) => {
             }
         });
 
+        // ✅ Save position
         activePosition = {
             symbol: 'BTCUSDT',
             buyPrice: currentPrice,
@@ -103,7 +107,7 @@ exports.sell = async (req, res) => {
 
         if (lossPct >= takeProfitPct || lossPct <= stopLossPct) {
             const rawQty = activePosition.qty;
-            const stepSize = '0.00001000';
+            const stepSize = '0.00001';
             let qty = roundToStepSize(rawQty, stepSize);
 
             if (!/^\d+(\.\d+)?$/.test(qty)) {
@@ -163,7 +167,7 @@ exports.getBalance = async (req, res) => {
         });
 
         if (!apiRes.data || !apiRes.data.balances) {
-            throw new Error('Invalid response');
+            throw new Error('Invalid response from Binance');
         }
 
         const usdt = apiRes.data.balances.find(b => b.asset === 'USDT');
