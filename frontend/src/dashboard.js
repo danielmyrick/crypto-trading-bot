@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentBalance = parseFloat(localStorage.getItem('botBalance') || 109);
     let totalProfit = parseFloat(localStorage.getItem('botTotalProfit') || 0);
 
-    // ✅ Update balance
+    // Update balance
     function updateBalance() {
         if (typeof currentBalance !== 'number' || isNaN(currentBalance)) {
             currentBalance = parseFloat(localStorage.getItem('botBalance') || 109);
@@ -31,11 +31,11 @@ document.addEventListener('DOMContentLoaded', function () {
         localStorage.setItem('botTotalProfit', totalProfit);
     }
 
-    // ✅ Load real balance from Binance.us
+    // Load real balance from Binance.us
     async function loadRealBalance() {
         try {
             const res = await fetch('/api/balance');
-            let usdtBalance = 109; // Fallback
+            let usdtBalance = 109;
 
             if (res.ok) {
                 const data = await res.json();
@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // ✅ Log trade
+    // Log trade
     function logTrade(type, pair, amount, pl) {
         const trade = document.createElement('div');
         trade.className = 'trade';
@@ -71,12 +71,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // ✅ Initialize
+    // Initialize
     updateBalance();
     loadRealBalance();
     setInterval(loadRealBalance, 30000);
 
-    // ✅ Load prices
+    // Load prices
     async function loadPrices() {
         try {
             const res = await fetch('/api/market');
@@ -98,7 +98,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // ✅ Start/Stop Bot
+    // Start/Stop Bot
     toggleBtn.addEventListener('click', async () => {
         botRunning = !botRunning;
         toggleBtn.textContent = botRunning ? '⏹️ Stop Bot' : '▶️ Start Bot';
@@ -143,4 +143,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-// Load prices on start and every 30
+    // Load prices on start and every 30 sec
+    loadPrices();
+    setInterval(loadPrices, 30000);
+});
