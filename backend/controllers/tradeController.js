@@ -17,17 +17,26 @@ function roundToStepSize(qty, stepSize) {
     return parseFloat(rounded).toString();
 }
 
-let activePosition = null;
-let highestPrice = null;
+function getStepSize(symbol) {
+    if (symbol === 'XRPUSDT') return '1.00000000';
+    if (symbol === 'ADAUSDT') return '1.00000000';
+    if (symbol === 'SOLUSDT') return '0.01000000';
+    if (symbol === 'XLMUSDT') return '1.00000000';
+    if (symbol === 'DOTUSDT') return '0.10000000';
+    return '0.00001000';
+}
 
-// ✅ Buy Altcoins: XRP, ADA, SOL, XLM, DOT
+let activePositions = []; // ✅ Now supports multiple
+let highestPrices = {};   // Track high price per coin
+
+// ✅ Buy Altcoins
 exports.buy = async (req, res) => {
     const { symbol = 'XRPUSDT' } = req.body;
-    const TRADE_SIZE = 15; // $15 per trade
+    const TRADE_SIZE = 15;
 
-    if (activePosition) {
-        console.log('❌ Already in position:', activePosition);
-        return res.json({ success: false, message: 'Already in position' });
+    const existing = activePositions.find(p => p.symbol === symbol);
+    if (existing) {
+        return res.json({ success: false, message: `Already holding ${symbol}` });
     }
 
     try {
@@ -37,29 +46,8 @@ exports.buy = async (req, res) => {
         const currentPrice = parseFloat(priceRes.data.price);
         const rawQty = TRADE_SIZE / currentPrice;
 
-        // ✅ Set correct stepSize for each coin
-        let stepSize;
-        if (symbol === 'XRPUSDT') {
-            stepSize = '1.00000000'; // XRP: whole numbers only
-        } else if (symbol === 'ADAUSDT') {
-            stepSize = '1.00000000'; // ADA: whole numbers
-        } else if (symbol === 'SOLUSDT') {
-            stepSize = '0.01000000'; // SOL: 2 decimals
-        } else if (symbol === 'XLMUSDT') {
-            stepSize = '1.00000000'; // XLM: whole numbers
-        } else if (symbol === 'DOTUSDT') {
-            stepSize = '0.10000000'; // DOT: 1 decimal
-        } else {
-            stepSize = '0.00001000'; // Default for BTC/ETH
-        }
-
+        const stepSize = getStepSize(symbol);
         let qty = roundToStepSize(rawQty, stepSize);
-
-        if (!/^\d+(\.\d+)?$/.test(qty)) {
-            return res.json({ success: false, message: 'Invalid quantity format' });
-        }
-
-        console.log('🎯 Attempting BUY with quantity:', qty);
 
         const params = new URLSearchParams({
             symbol,
@@ -71,135 +59,94 @@ exports.buy = async (req, res) => {
         params.append('signature', signRequest(params.toString()));
 
         const orderRes = await axios.post(`${BASE_URL}/api/v3/order`, params, {
-            headers: {
-                'X-MBX-APIKEY': API_KEY,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
+            headers: { 'X-MBX-APIKEY': API_KEY }
         });
 
-        console.log('✅ REAL BUY ORDER:', orderRes.data);
-
-        activePosition = {
+        activePositions.push({
             symbol,
             buyPrice: currentPrice,
             qty: parseFloat(orderRes.data.executedQty),
             invested: TRADE_SIZE
-        };
+        });
+
+        highestPrices[symbol] = currentPrice;
 
         res.json({
             success: true,
             message: `Bought $${TRADE_SIZE} of ${symbol}`,
-            position: activePosition
+            position: activePositions[activePositions.length - 1]
         });
     } catch (error) {
-        console.error('❌ BUY ERROR:', error.response?.data || error.message);
+        console.error('BUY ERROR:', error.response?.data || error.message);
         res.status(500).json({ success: false, error: 'Buy failed' });
     }
 };
 
 // ✅ Sell with Trailing Logic
 exports.sell = async (req, res) => {
-    if (!activePosition) {
-        return res.json({ success: false, message: 'No active position' });
+    if (activePositions.length === 0) {
+        return res.json({ success: false, message: 'No active positions' });
     }
 
-    try {
-        const priceRes = await axios.get(`${BASE_URL}/api/v3/ticker/price`, {
-            params: { symbol: activePosition.symbol }
-        });
-        const currentPrice = parseFloat(priceRes.data.price);
-        const buyPrice = activePosition.buyPrice;
-        const lossPct = ((currentPrice - buyPrice) / buyPrice) * 100;
+    const closedPositions = [];
 
-        // ✅ Trailing logic: track highest price since buy
-        if (highestPrice === null || currentPrice > highestPrice) {
-            highestPrice = currentPrice;
-        }
+    for (let i = activePositions.length - 1; i >= 0; i--) {
+        const pos = activePositions[i];
+        const symbol = pos.symbol;
 
-        const pullbackPct = ((currentPrice - highestPrice) / highestPrice) * 100;
+        try {
+            const priceRes = await axios.get(`${BASE_URL}/api/v3/ticker/price`, {
+                params: { symbol }
+            });
+            const currentPrice = parseFloat(priceRes.data.price);
+            const buyPrice = pos.buyPrice;
+            const lossPct = ((currentPrice - buyPrice) / buyPrice) * 100;
+            const highestPrice = highestPrices[symbol] || buyPrice;
+            if (currentPrice > highestPrice) highestPrices[symbol] = currentPrice;
+            const pullbackPct = ((currentPrice - highestPrice) / highestPrice) * 100;
 
-        console.log('📊 Price check:', {
-            buyPrice,
-            currentPrice,
-            highestPrice,
-            lossPct: lossPct.toFixed(2) + '%',
-            pullbackPct: pullbackPct.toFixed(2) + '%'
-        });
+            if (lossPct >= 3 || pullbackPct <= -1) {
+                const stepSize = getStepSize(symbol);
+                const qty = roundToStepSize(pos.qty, stepSize);
 
-        // ✅ Sell if profit >= 3% OR price drops 1% from peak
-        if (lossPct >= 3 || pullbackPct <= -1) {
-            const rawQty = activePosition.qty;
+                const params = new URLSearchParams({
+                    symbol,
+                    side: 'SELL',
+                    type: 'MARKET',
+                    quantity: qty,
+                    timestamp: Date.now()
+                });
+                params.append('signature', signRequest(params.toString()));
 
-            // ✅ Use same stepSize logic as buy
-            let stepSize;
-            const symbol = activePosition.symbol;
-            if (symbol === 'XRPUSDT') {
-                stepSize = '1.00000000';
-            } else if (symbol === 'ADAUSDT') {
-                stepSize = '1.00000000';
-            } else if (symbol === 'SOLUSDT') {
-                stepSize = '0.01000000';
-            } else if (symbol === 'XLMUSDT') {
-                stepSize = '1.00000000';
-            } else if (symbol === 'DOTUSDT') {
-                stepSize = '0.10000000';
-            } else {
-                stepSize = '0.00001000';
+                const orderRes = await axios.post(`${BASE_URL}/api/v3/order`, params, {
+                    headers: { 'X-MBX-APIKEY': API_KEY }
+                });
+
+                const profit = (currentPrice * pos.qty) - pos.invested;
+                closedPositions.push({ symbol, profit });
+
+                activePositions.splice(i, 1);
+                delete highestPrices[symbol];
             }
-
-            let qty = roundToStepSize(rawQty, stepSize);
-
-            if (!/^\d+(\.\d+)?$/.test(qty)) {
-                console.error('❌ Invalid quantity format:', qty);
-                return res.json({ success: false, message: 'Invalid quantity format' });
-            }
-
-            console.log('🎯 Attempting SELL with quantity:', qty);
-
-            const params = new URLSearchParams({
-                symbol: activePosition.symbol,
-                side: 'SELL',
-                type: 'MARKET',
-                quantity: qty,
-                timestamp: Date.now()
-            });
-            params.append('signature', signRequest(params.toString()));
-
-            const orderRes = await axios.post(`${BASE_URL}/api/v3/order`, params, {
-                headers: {
-                    'X-MBX-APIKEY': API_KEY,
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                }
-            });
-
-            console.log('✅ REAL SELL ORDER:', orderRes.data);
-
-            const soldValue = currentPrice * activePosition.qty;
-            const profit = soldValue - activePosition.invested;
-            const position = { ...activePosition };
-            activePosition = null;
-            highestPrice = null; // Reset
-
-            return res.json({
-                success: true,
-                message: `Sold at ${lossPct.toFixed(2)}% | Profit: $${profit.toFixed(2)}`,
-                profit,
-                profitPct: lossPct,
-                position
-            });
+        } catch (error) {
+            console.error(`Sell error for ${symbol}:`, error.message);
         }
-
-        console.log('⏳ Holding: not at target', { lossPct: lossPct.toFixed(2), pullbackPct: pullbackPct.toFixed(2) });
-        return res.json({ success: false, message: `Waiting: ${lossPct.toFixed(2)}% | Pullback: ${pullbackPct.toFixed(2)}%` });
-    } catch (error) {
-        console.error('❌ Sell error:', error.response?.data || error.message);
-        res.status(500).json({ success: false, error: error.message });
     }
+
+    if (closedPositions.length > 0) {
+        return res.json({
+            success: true,
+            message: `Sold ${closedPositions.length} positions`,
+            positions: closedPositions
+        });
+    }
+
+    return res.json({ success: false, message: 'No positions ready to sell' });
 };
 
 // ✅ Status
 exports.status = (req, res) => {
-    res.json({ activePosition });
+    res.json({ activePositions });
 };
 
 // ✅ Balance

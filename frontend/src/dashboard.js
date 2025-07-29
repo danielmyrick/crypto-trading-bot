@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentBalance = parseFloat(localStorage.getItem('botBalance') || 109);
     let totalProfit = parseFloat(localStorage.getItem('botTotalProfit') || 0);
 
-    // ✅ Replace BTC with altcoins
+    // ✅ Altcoins
     const symbols = ['XRPUSDT', 'ADAUSDT', 'SOLUSDT', 'XLMUSDT', 'DOTUSDT'];
 
     function updateBalance() {
@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', function () {
             tradesEl.removeChild(tradesEl.lastChild);
         }
     }
+
     async function loadPrices() {
         try {
             const res = await fetch('/api/market');
@@ -74,15 +75,70 @@ document.addEventListener('DOMContentLoaded', function () {
                 const item = document.createElement('div');
                 item.className = 'price-item';
                 item.innerHTML = `
-        <strong>${pair}</strong>
-        <span>$${info.price.toLocaleString()}</span>
-        <span class="${info.change?.startsWith('+') ? 'price-up' : 'price-down'}">${info.change}</span>
-      `;
+          <strong>${pair}</strong>
+          <span>$${info.price.toLocaleString()}</span>
+          <span class="${info.change?.startsWith('+') ? 'price-up' : 'price-down'}">${info.change}</span>
+        `;
                 pricesEl.appendChild(item);
             });
         } catch (err) {
             console.error('Failed to load prices:', err);
             pricesEl.innerHTML = '<div>❌ Failed to load prices</div>';
+        }
+    }
+
+    // ✅ Buy all coins at once
+    async function buyAllCoins() {
+        for (const symbol of symbols) {
+            if (currentBalance >= 15) {
+                try {
+                    const buyRes = await fetch('/api/buy', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ symbol })
+                    });
+
+                    if (!buyRes.headers.get('content-type')?.includes('application/json')) {
+                        const text = await buyRes.text();
+                        console.error('❌ Buy response not JSON:', text);
+                        continue;
+                    }
+
+                    const buyData = await buyRes.json();
+                    if (buyData.success) {
+                        currentBalance -= 15;
+                        updateBalance();
+                        logTrade('BUY', symbol, 15, '—');
+                    }
+                } catch (err) {
+                    console.error('Buy error:', err);
+                }
+            }
+        }
+    }
+
+    // ✅ Sell all positions
+    async function sellAllPositions() {
+        try {
+            const sellRes = await fetch('/api/sell', { method: 'POST' });
+            if (!sellRes.headers.get('content-type')?.includes('application/json')) {
+                const text = await sellRes.text();
+                console.error('❌ Sell response not JSON:', text);
+                return;
+            }
+
+            const sellData = await sellRes.json();
+            if (sellData.success && sellData.positions) {
+                sellData.positions.forEach(pos => {
+                    const profit = pos.profit;
+                    currentBalance += 15 + profit;
+                    totalProfit += profit;
+                    logTrade('SELL', pos.symbol, 15 + profit, `+$${profit.toFixed(2)}`);
+                });
+                updateBalance();
+            }
+        } catch (err) {
+            console.error('Sell error:', err);
         }
     }
 
@@ -92,97 +148,13 @@ document.addEventListener('DOMContentLoaded', function () {
         toggleBtn.className = botRunning ? 'active' : 'inactive';
 
         if (botRunning) {
-            alert('Bot started! Using $109 capital, $15/trade, 1% profit target.');
+            alert('Bot started! Buying XRP, ADA, SOL, XLM, DOT simultaneously.');
 
-            tradeInterval = setInterval(async () => {
-                try {
-                    const statusRes = await fetch('/api/status');
-                    const contentType = statusRes.headers.get('content-type');
-                    if (!contentType || !contentType.includes('application/json')) {
-                        const text = await statusRes.text();
-                        console.error('❌ Not JSON:', text);
-                        return;
-                    }
+            // ✅ Buy all at once
+            await buyAllCoins();
 
-                    const status = await statusRes.json();
-
-                    if (!status.activePosition) {
-                        if (currentBalance >= 15) { // ✅ Now $15
-                            // Scan for best altcoin to buy
-                            const priceRes = await fetch('/api/market');
-                            const priceContentType = priceRes.headers.get('content-type');
-                            if (!priceContentType?.includes('application/json')) return;
-
-                            const prices = await priceRes.json();
-                            let bought = false;
-
-                            for (const symbol of symbols) {
-                                const info = prices[symbol];
-                                if (info && info.change && parseFloat(info.change) > 0.5) {
-                                    // Buy on momentum
-                                    const buyRes = await fetch('/api/buy', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ symbol })
-                                    });
-
-                                    if (!buyRes.headers.get('content-type')?.includes('application/json')) {
-                                        const text = await buyRes.text();
-                                        console.error('❌ Buy response not JSON:', text);
-                                        continue;
-                                    }
-
-                                    const buyData = await buyRes.json();
-                                    if (buyData.success) {
-                                        currentBalance -= 15; // ✅ Deduct $15
-                                        updateBalance();
-                                        logTrade('BUY', symbol, 15, '—'); // ✅ Log $15
-                                        bought = true;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if (!bought && currentBalance >= 15) {
-                                // Fallback: buy first symbol if no momentum
-                                const fallbackSymbol = symbols[0];
-                                const buyRes = await fetch('/api/buy', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ symbol: fallbackSymbol })
-                                });
-
-                                const buyData = await buyRes.json();
-                                if (buyData.success) {
-                                    currentBalance -= 15; // ✅ Deduct $15
-                                    updateBalance();
-                                    logTrade('BUY', fallbackSymbol, 15, '—'); // ✅ Log $15
-                                }
-                            }
-                        }
-                    } else {
-                        // Sell logic
-                        const sellRes = await fetch('/api/sell', { method: 'POST' });
-
-                        if (!sellRes.headers.get('content-type')?.includes('application/json')) {
-                            const text = await sellRes.text();
-                            console.error('❌ Sell response not JSON:', text);
-                            return;
-                        }
-
-                        const sellData = await sellRes.json();
-                        if (sellData.success && sellData.profit !== undefined) {
-                            const profit = sellData.profit;
-                            currentBalance += 15 + profit; // ✅ Add $15 + profit
-                            totalProfit += profit;
-                            updateBalance();
-                            logTrade('SELL', status.activePosition?.symbol || 'ALT', 15 + profit, `+$${profit.toFixed(2)}`);
-                        }
-                    }
-                } catch (err) {
-                    console.error('Auto-trade error:', err);
-                }
-            }, 30000);
+            // ✅ Then auto-sell every 30 seconds
+            tradeInterval = setInterval(sellAllPositions, 30000);
         } else {
             clearInterval(tradeInterval);
             alert('Bot stopped.');
