@@ -56,7 +56,6 @@ document.addEventListener('DOMContentLoaded', function () {
             tradesEl.removeChild(tradesEl.lastChild);
         }
     }
-
     async function loadPrices() {
         try {
             const res = await fetch('/api/market');
@@ -67,16 +66,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 pricesEl.innerHTML = '<div>❌ Failed to load prices</div>';
                 return;
             }
+
             const data = await res.json();
             pricesEl.innerHTML = '';
+
             Object.entries(data).forEach(([pair, info]) => {
                 const item = document.createElement('div');
                 item.className = 'price-item';
                 item.innerHTML = `
-          <strong>${pair}</strong>
-          <span>$${info.price.toLocaleString()}</span>
-          <span class="${info.change?.startsWith('+') ? 'price-up' : 'price-down'}">${info.change}</span>
-        `;
+        <strong>${pair}</strong>
+        <span>$${info.price.toLocaleString()}</span>
+        <span class="${info.change?.startsWith('+') ? 'price-up' : 'price-down'}">${info.change}</span>
+      `;
                 pricesEl.appendChild(item);
             });
         } catch (err) {
