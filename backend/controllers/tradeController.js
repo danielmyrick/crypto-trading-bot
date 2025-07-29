@@ -11,8 +11,10 @@ function signRequest(query) {
 }
 
 function roundToStepSize(qty, stepSize) {
-    const precision = Math.floor(Math.log10(1 / parseFloat(stepSize)));
-    return (Math.floor(qty / parseFloat(stepSize)) * parseFloat(stepSize)).toFixed(precision);
+    const step = parseFloat(stepSize);
+    const precision = Math.floor(Math.log10(1 / step));
+    const rounded = (Math.floor(qty / step) * step).toFixed(precision);
+    return parseFloat(rounded).toString();
 }
 
 let activePosition = null;
@@ -20,7 +22,7 @@ let highestPrice = null;
 
 // ✅ Buy Altcoins: XRP, ADA, SOL, XLM, DOT
 exports.buy = async (req, res) => {
-    const { symbol = 'XRPUSDT' } = req.body; // Default to XRP
+    const { symbol = 'XRPUSDT' } = req.body;
     const TRADE_SIZE = 15; // $15 per trade
 
     if (activePosition) {
@@ -35,12 +37,22 @@ exports.buy = async (req, res) => {
         const currentPrice = parseFloat(priceRes.data.price);
         const rawQty = TRADE_SIZE / currentPrice;
 
-        // Skip if too small (only for high-price coins)
-        if (rawQty < 0.00001 && ['BTCUSDT', 'ETHUSDT'].includes(symbol)) {
-            return res.json({ success: false, message: 'Trade size too small for this coin' });
+        // ✅ Set correct stepSize for each coin
+        let stepSize;
+        if (symbol === 'XRPUSDT') {
+            stepSize = '1.00000000'; // XRP: whole numbers only
+        } else if (symbol === 'ADAUSDT') {
+            stepSize = '1.00000000'; // ADA: whole numbers
+        } else if (symbol === 'SOLUSDT') {
+            stepSize = '0.01000000'; // SOL: 2 decimals
+        } else if (symbol === 'XLMUSDT') {
+            stepSize = '1.00000000'; // XLM: whole numbers
+        } else if (symbol === 'DOTUSDT') {
+            stepSize = '0.10000000'; // DOT: 1 decimal
+        } else {
+            stepSize = '0.00001000'; // Default for BTC/ETH
         }
 
-        const stepSize = '0.00001000';
         let qty = roundToStepSize(rawQty, stepSize);
 
         if (!/^\d+(\.\d+)?$/.test(qty)) {
@@ -117,7 +129,24 @@ exports.sell = async (req, res) => {
         // ✅ Sell if profit >= 3% OR price drops 1% from peak
         if (lossPct >= 3 || pullbackPct <= -1) {
             const rawQty = activePosition.qty;
-            const stepSize = '0.00001000';
+
+            // ✅ Use same stepSize logic as buy
+            let stepSize;
+            const symbol = activePosition.symbol;
+            if (symbol === 'XRPUSDT') {
+                stepSize = '1.00000000';
+            } else if (symbol === 'ADAUSDT') {
+                stepSize = '1.00000000';
+            } else if (symbol === 'SOLUSDT') {
+                stepSize = '0.01000000';
+            } else if (symbol === 'XLMUSDT') {
+                stepSize = '1.00000000';
+            } else if (symbol === 'DOTUSDT') {
+                stepSize = '0.10000000';
+            } else {
+                stepSize = '0.00001000';
+            }
+
             let qty = roundToStepSize(rawQty, stepSize);
 
             if (!/^\d+(\.\d+)?$/.test(qty)) {
@@ -190,10 +219,20 @@ exports.getBalance = async (req, res) => {
 
         const usdt = apiRes.data.balances.find(b => b.asset === 'USDT');
         const btc = apiRes.data.balances.find(b => b.asset === 'BTC');
+        const xrp = apiRes.data.balances.find(b => b.asset === 'XRP');
+        const ada = apiRes.data.balances.find(b => b.asset === 'ADA');
+        const sol = apiRes.data.balances.find(b => b.asset === 'SOL');
+        const xlm = apiRes.data.balances.find(b => b.asset === 'XLM');
+        const dot = apiRes.data.balances.find(b => b.asset === 'DOT');
 
         res.json({
             usdt: usdt ? parseFloat(usdt.free) : 0,
-            btc: btc ? parseFloat(btc.free) : 0
+            btc: btc ? parseFloat(btc.free) : 0,
+            xrp: xrp ? parseFloat(xrp.free) : 0,
+            ada: ada ? parseFloat(ada.free) : 0,
+            sol: sol ? parseFloat(sol.free) : 0,
+            xlm: xlm ? parseFloat(xlm.free) : 0,
+            dot: dot ? parseFloat(dot.free) : 0
         });
     } catch (err) {
         console.error('Balance fetch failed:', err.message);
