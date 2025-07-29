@@ -10,6 +10,9 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentBalance = parseFloat(localStorage.getItem('botBalance') || 109);
     let totalProfit = parseFloat(localStorage.getItem('botTotalProfit') || 0);
 
+    // ✅ Replace BTC with altcoins
+    const symbols = ['XRPUSDT', 'ADAUSDT', 'SOLUSDT', 'XLMUSDT', 'DOTUSDT'];
+
     function updateBalance() {
         if (typeof currentBalance !== 'number' || isNaN(currentBalance)) {
             currentBalance = 109;
@@ -88,7 +91,7 @@ document.addEventListener('DOMContentLoaded', function () {
         toggleBtn.className = botRunning ? 'active' : 'inactive';
 
         if (botRunning) {
-            alert('Bot started! Using $109 capital, $35/trade, 1% profit target.');
+            alert('Bot started! Using $109 capital, $15/trade, 1% profit target.');
 
             tradeInterval = setInterval(async () => {
                 try {
@@ -103,23 +106,61 @@ document.addEventListener('DOMContentLoaded', function () {
                     const status = await statusRes.json();
 
                     if (!status.activePosition) {
-                        if (currentBalance >= 35) {
-                            const buyRes = await fetch('/api/buy', { method: 'POST' });
+                        if (currentBalance >= 15) { // ✅ Now $15
+                            // Scan for best altcoin to buy
+                            const priceRes = await fetch('/api/market');
+                            const priceContentType = priceRes.headers.get('content-type');
+                            if (!priceContentType?.includes('application/json')) return;
 
-                            if (!buyRes.headers.get('content-type')?.includes('application/json')) {
-                                const text = await buyRes.text();
-                                console.error('❌ Buy response not JSON:', text);
-                                return;
+                            const prices = await priceRes.json();
+                            let bought = false;
+
+                            for (const symbol of symbols) {
+                                const info = prices[symbol];
+                                if (info && info.change && parseFloat(info.change) > 0.5) {
+                                    // Buy on momentum
+                                    const buyRes = await fetch('/api/buy', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ symbol })
+                                    });
+
+                                    if (!buyRes.headers.get('content-type')?.includes('application/json')) {
+                                        const text = await buyRes.text();
+                                        console.error('❌ Buy response not JSON:', text);
+                                        continue;
+                                    }
+
+                                    const buyData = await buyRes.json();
+                                    if (buyData.success) {
+                                        currentBalance -= 15; // ✅ Deduct $15
+                                        updateBalance();
+                                        logTrade('BUY', symbol, 15, '—'); // ✅ Log $15
+                                        bought = true;
+                                        break;
+                                    }
+                                }
                             }
 
-                            const buyData = await buyRes.json();
-                            if (buyData.success) {
-                                currentBalance -= 35;
-                                updateBalance();
-                                logTrade('BUY', 'BTC/USDT', 35, '—');
+                            if (!bought && currentBalance >= 15) {
+                                // Fallback: buy first symbol if no momentum
+                                const fallbackSymbol = symbols[0];
+                                const buyRes = await fetch('/api/buy', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ symbol: fallbackSymbol })
+                                });
+
+                                const buyData = await buyRes.json();
+                                if (buyData.success) {
+                                    currentBalance -= 15; // ✅ Deduct $15
+                                    updateBalance();
+                                    logTrade('BUY', fallbackSymbol, 15, '—'); // ✅ Log $15
+                                }
                             }
                         }
                     } else {
+                        // Sell logic
                         const sellRes = await fetch('/api/sell', { method: 'POST' });
 
                         if (!sellRes.headers.get('content-type')?.includes('application/json')) {
@@ -129,12 +170,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
 
                         const sellData = await sellRes.json();
-                        if (sellData.success && sellData.profit) {
+                        if (sellData.success && sellData.profit !== undefined) {
                             const profit = sellData.profit;
-                            currentBalance += 35 + profit;
+                            currentBalance += 15 + profit; // ✅ Add $15 + profit
                             totalProfit += profit;
                             updateBalance();
-                            logTrade('SELL', 'BTC/USDT', 35 + profit, `+$${profit.toFixed(2)}`);
+                            logTrade('SELL', status.activePosition?.symbol || 'ALT', 15 + profit, `+$${profit.toFixed(2)}`);
                         }
                     }
                 } catch (err) {

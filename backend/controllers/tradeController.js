@@ -16,10 +16,12 @@ function roundToStepSize(qty, stepSize) {
 }
 
 let activePosition = null;
+let highestPrice = null;
 
-// ✅ Buy BTC/USDT
+// ✅ Buy Altcoins: XRP, ADA, SOL, XLM, DOT
 exports.buy = async (req, res) => {
-    const TRADE_SIZE = 20;
+    const { symbol = 'XRPUSDT' } = req.body; // Default to XRP
+    const TRADE_SIZE = 15; // $15 per trade
 
     if (activePosition) {
         console.log('❌ Already in position:', activePosition);
@@ -28,13 +30,14 @@ exports.buy = async (req, res) => {
 
     try {
         const priceRes = await axios.get(`${BASE_URL}/api/v3/ticker/price`, {
-            params: { symbol: 'BTCUSDT' }
+            params: { symbol }
         });
         const currentPrice = parseFloat(priceRes.data.price);
         const rawQty = TRADE_SIZE / currentPrice;
 
-        if (rawQty < 0.00001) {
-            return res.json({ success: false, message: 'Trade size too small' });
+        // Skip if too small (only for high-price coins)
+        if (rawQty < 0.00001 && ['BTCUSDT', 'ETHUSDT'].includes(symbol)) {
+            return res.json({ success: false, message: 'Trade size too small for this coin' });
         }
 
         const stepSize = '0.00001000';
@@ -47,7 +50,7 @@ exports.buy = async (req, res) => {
         console.log('🎯 Attempting BUY with quantity:', qty);
 
         const params = new URLSearchParams({
-            symbol: 'BTCUSDT',
+            symbol,
             side: 'BUY',
             type: 'MARKET',
             quantity: qty,
@@ -65,7 +68,7 @@ exports.buy = async (req, res) => {
         console.log('✅ REAL BUY ORDER:', orderRes.data);
 
         activePosition = {
-            symbol: 'BTCUSDT',
+            symbol,
             buyPrice: currentPrice,
             qty: parseFloat(orderRes.data.executedQty),
             invested: TRADE_SIZE
@@ -73,36 +76,46 @@ exports.buy = async (req, res) => {
 
         res.json({
             success: true,
-            message: `Bought $${TRADE_SIZE} of BTC`,
+            message: `Bought $${TRADE_SIZE} of ${symbol}`,
             position: activePosition
         });
     } catch (error) {
         console.error('❌ BUY ERROR:', error.response?.data || error.message);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: 'Buy failed' });
     }
 };
 
-// ✅ Sell BTC/USDT
+// ✅ Sell with Trailing Logic
 exports.sell = async (req, res) => {
-    console.log('🔍 Checking activePosition:', activePosition);
     if (!activePosition) {
         return res.json({ success: false, message: 'No active position' });
     }
 
     try {
         const priceRes = await axios.get(`${BASE_URL}/api/v3/ticker/price`, {
-            params: { symbol: 'BTCUSDT' }
+            params: { symbol: activePosition.symbol }
         });
         const currentPrice = parseFloat(priceRes.data.price);
         const buyPrice = activePosition.buyPrice;
         const lossPct = ((currentPrice - buyPrice) / buyPrice) * 100;
 
-        console.log('📊 Price check:', { buyPrice, currentPrice, lossPct: lossPct.toFixed(2) + '%' });
+        // ✅ Trailing logic: track highest price since buy
+        if (highestPrice === null || currentPrice > highestPrice) {
+            highestPrice = currentPrice;
+        }
 
-        const takeProfitPct = 0.5; // Sell at +0.5%
-        const stopLossPct = -1;   // Or -1%
-        // Revert to real logic
-        if (lossPct >= takeProfitPct || lossPct <= stopLossPct) {
+        const pullbackPct = ((currentPrice - highestPrice) / highestPrice) * 100;
+
+        console.log('📊 Price check:', {
+            buyPrice,
+            currentPrice,
+            highestPrice,
+            lossPct: lossPct.toFixed(2) + '%',
+            pullbackPct: pullbackPct.toFixed(2) + '%'
+        });
+
+        // ✅ Sell if profit >= 3% OR price drops 1% from peak
+        if (lossPct >= 3 || pullbackPct <= -1) {
             const rawQty = activePosition.qty;
             const stepSize = '0.00001000';
             let qty = roundToStepSize(rawQty, stepSize);
@@ -115,7 +128,7 @@ exports.sell = async (req, res) => {
             console.log('🎯 Attempting SELL with quantity:', qty);
 
             const params = new URLSearchParams({
-                symbol: 'BTCUSDT',
+                symbol: activePosition.symbol,
                 side: 'SELL',
                 type: 'MARKET',
                 quantity: qty,
@@ -136,6 +149,7 @@ exports.sell = async (req, res) => {
             const profit = soldValue - activePosition.invested;
             const position = { ...activePosition };
             activePosition = null;
+            highestPrice = null; // Reset
 
             return res.json({
                 success: true,
@@ -146,8 +160,8 @@ exports.sell = async (req, res) => {
             });
         }
 
-        console.log('⏳ Holding: not at target', { lossPct: lossPct.toFixed(2) });
-        return res.json({ success: false, message: `Waiting: ${lossPct.toFixed(2)}%` });
+        console.log('⏳ Holding: not at target', { lossPct: lossPct.toFixed(2), pullbackPct: pullbackPct.toFixed(2) });
+        return res.json({ success: false, message: `Waiting: ${lossPct.toFixed(2)}% | Pullback: ${pullbackPct.toFixed(2)}%` });
     } catch (error) {
         console.error('❌ Sell error:', error.response?.data || error.message);
         res.status(500).json({ success: false, error: error.message });
